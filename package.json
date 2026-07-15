@@ -2,6 +2,7 @@
   "name": "screening-partner-demo",
   "version": "1.0.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "Demo app for the Screening by Burnt Partner API (Model A/B) — provision a unit + screening, start a no-login applicant screening, and poll the application-group status/decision.",
   "scripts": {

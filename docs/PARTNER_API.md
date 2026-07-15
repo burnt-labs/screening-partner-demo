@@ -105,6 +105,10 @@ GET /api/v1/units            → { "data": [ { unit }, … ] }
 GET /api/v1/units/{unitId}   → a single unit (404 if it isn't yours)
 ```
 
+> **Pagination & rate limits.** This reference doesn't specify how `GET /units` paginates at scale, or
+> what rate limits apply. Confirm current behavior with your Burnt contact before building list-heavy or
+> high-volume flows.
+
 ### Configure a unit's screening
 
 ```
@@ -334,6 +338,33 @@ function verifyBurntWebhook(headers, rawBody, secret) {
   const b = Buffer.from(expected);
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
+```
+
+**Any language.** The signature is a standard HMAC-SHA256 over the same signed string, so you can verify it
+in whatever your backend runs. The same check in Python:
+
+```python
+import hashlib
+import hmac
+import time
+from datetime import datetime
+
+
+def verify_burnt_webhook(headers, raw_body, secret):
+    """`raw_body` = the exact request body as received (str or bytes), not a re-serialized dict."""
+    signature = headers.get("x-burnt-signature")
+    timestamp = headers.get("x-burnt-timestamp")
+    delivery_id = headers.get("x-burnt-delivery-id")
+    if not (signature and timestamp and delivery_id):
+        return False
+    # X-Burnt-Timestamp is ISO-8601 — enforce the 5-minute replay window.
+    sent = datetime.fromisoformat(timestamp.replace("Z", "+00:00")).timestamp()
+    if abs(time.time() - sent) > 5 * 60:
+        return False
+    body = raw_body.decode() if isinstance(raw_body, bytes) else raw_body
+    signed = f"{timestamp}.{delivery_id}.{body}"
+    expected = "sha256=" + hmac.new(secret.encode(), signed.encode(), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(signature, expected)
 ```
 
 **Idempotency.** Deliveries may be retried. Deduplicate on the delivery id (and/or event id) so you

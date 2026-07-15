@@ -23,10 +23,14 @@ if (!BURNT_API_KEY) {
 }
 
 // ── In-memory state (last ids), for form prefill after reload ─────────────────
+// DEMO SHORTCUT: this state is per-process and lost on restart. A real integration doesn't keep ids in
+// memory — persist unit_id / application_group_id on your own records (lease, applicant, user) so you can
+// correlate results later, and back `seenDeliveries` with a durable store (DB/Redis) so webhook dedupe
+// survives restarts and works across instances. See README → "Going to production".
 let lastUnitId = null;
 let lastGroupId = null;
 const recentWebhooks = []; // most-recent-first; capped
-const seenDeliveries = new Set(); // webhook idempotency
+const seenDeliveries = new Set(); // webhook idempotency (demo-only — see note above)
 
 // ── Burnt Partner API proxy helper ────────────────────────────────────────────
 /**
@@ -213,6 +217,8 @@ function recordWebhook(outcome, deliveryId, event) {
   console.log(`[webhook] ${outcome} — event "${event?.event ?? 'unknown'}" (delivery ${deliveryId ?? '—'})`);
 }
 
+// DEMO: verifies then processes inline. In production, verify → enqueue → return 200 quickly and process
+// the event asynchronously, so a slow handler can't cause Burnt to time out and retry.
 function handleWebhook(req, res) {
   const rawBody = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : String(req.body ?? '');
   const deliveryId = req.get('x-burnt-delivery-id') || null;

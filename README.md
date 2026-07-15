@@ -10,6 +10,9 @@ household (application-group) status and decision.
 - **[`docs/PARTNER_API.md`](docs/PARTNER_API.md)** — the full Partner API reference (endpoints,
   request/response shapes, webhook signatures, error codes) that this harness exercises.
 
+> **This is a demo to *learn* the flow by hand — not a drop-in integration.** Before building against
+> the API in your own app or website, read [**Going to production**](#going-to-production) below.
+
 ## Security model (the one rule that matters)
 
 **The API key never reaches the browser.** The page calls this local proxy (`/api/*`); the proxy adds
@@ -18,7 +21,13 @@ status + body verbatim. The key lives only in `.env` (gitignored) and only in th
 
 ## Setup
 
-1. **`.env`** (already created; gitignored). The important knob:
+1. **Create your `.env`** by copying the template, then fill in your key (`.env` is gitignored):
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   The vars:
 
    ```
    BURNT_API_KEY=bvk_…                     # your partner key (a real secret)
@@ -30,8 +39,7 @@ status + body verbatim. The key lives only in `.env` (gitignored) and only in th
    > ⚠️ **`BURNT_BASE_URL` must be the same environment that minted the key.** A key from a different
    > environment just returns **401**. Options: local `http://localhost:5173`, staging
    > `https://app.staging.screening.burnt.com`, demo `https://app.demo.screening.burnt.com`, live
-   > `https://app.screening.burnt.com`. This key is a **staging** key, so `BURNT_BASE_URL` points at
-   > staging.
+   > `https://app.screening.burnt.com`.
 
 2. **The Burnt app must be reachable at `BURNT_BASE_URL`.** For **staging/demo/live** it's already hosted —
    nothing to run locally. Only for **local** do you start it yourself: `pnpm dev` in the
@@ -149,3 +157,31 @@ send-side error (tunnel down / wrong URL).
   `unit_unavailable`), and the 401 body varies — the harness displays whatever comes back, it doesn't
   assert on it.
 - If a call returns **502** from this proxy, the main Burnt app isn't reachable at `BURNT_BASE_URL`.
+
+## Going to production
+
+This repo is a **manual harness** — a human clicks the three sections and ids live in memory. A real
+integration calls the Partner API **server-to-server** from your backend and reacts to results
+programmatically. What to change:
+
+- **Persist ids on your own records.** The demo keeps `lastUnitId` / `lastGroupId` in a module-level
+  variable in `server.js` only so the page can prefill after reload. In your app, store the `unit_id` and
+  `application_group_id` the API returns on your own entity (lease, listing, applicant, user) so you can
+  correlate results later. Set `external_id` on `POST …/screenings` — it's your stable user id and the
+  dedupe key.
+- **Process webhooks durably.** The receiver in `server.js` verifies the signature correctly (raw body,
+  `sha256=` HMAC, 5-min replay window, constant-time compare) — copy that as-is. But it then dedupes
+  deliveries in an in-memory `Set` (`seenDeliveries`) that's lost on restart and not shared across
+  instances. In production: **verify → enqueue → return `200` fast**, process asynchronously, and back
+  the delivery-id dedupe with a durable store (DB / Redis) so retries are handled exactly once. Poll
+  `GET /application-groups/{id}` as a fallback.
+- **Fees & payment — mind the limitation.** The Partner API **cannot add cards.** `fee_payer: applicant`
+  paying the full $20 needs no card. But `fee_payer: operator` and any split where the landlord owes more
+  than $0 need a `payment_method_id` for a card **already saved in the Burnt dashboard** — so operator-pays
+  can't be fully automated via the API today. Plan for that step in the dashboard, or talk to Burnt about
+  your billing model.
+- **Any language works.** Nothing here is Node-specific: it's plain HTTPS with an `Authorization: Bearer`
+  header, and the webhook signature is a standard HMAC-SHA256 you can compute anywhere (see the
+  [Python example](docs/PARTNER_API.md#webhooks) in the API reference).
+- **Environments & keys.** A key is scoped to the environment that minted it (a staging key `401`s against
+  live). Build against **staging/demo**, then swap `BURNT_API_KEY` + `BURNT_BASE_URL` together for live.
