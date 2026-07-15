@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Screening by Burnt — Partner API Demo</title>
+    <style>
+      :root {
+        --bg: #f6f7f9;
+        --card: #ffffff;
+        --ink: #1c2024;
+        --muted: #6b7280;
+        --line: #e3e6ea;
+        --accent: #d9480f;
+        --accent-ink: #ffffff;
+        --code-bg: #0f1419;
+        --code-ink: #d7e0ea;
+        --ok: #1a7f37;
+        --err: #c02626;
+        --field: #ffffff;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0f1216;
+          --card: #171b21;
+          --ink: #e7ebef;
+          --muted: #9aa4b0;
+          --line: #262c34;
+          --accent: #f0611f;
+          --code-bg: #0b0e12;
+          --code-ink: #cdd6e0;
+          --ok: #4ac26b;
+          --err: #ff6b6b;
+          --field: #10141a;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        color: var(--ink);
+        background: var(--bg);
+      }
+      header {
+        padding: 22px 20px;
+        border-bottom: 1px solid var(--line);
+        background: var(--card);
+      }
+      header .wrap, main { max-width: 880px; margin: 0 auto; }
+      main { padding: 20px; }
+      h1 { margin: 0 0 4px; font-size: 20px; letter-spacing: -0.01em; }
+      h1 .dot { color: var(--accent); }
+      .sub { color: var(--muted); font-size: 13px; }
+      .config {
+        margin-top: 12px; font-size: 12.5px; color: var(--muted);
+        display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center;
+      }
+      .config code { color: var(--ink); }
+      .pill-key { color: var(--ok); font-weight: 600; }
+      section.card {
+        background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+        padding: 18px 18px 16px; margin: 16px 0;
+      }
+      section.card > h2 {
+        margin: 0 0 2px; font-size: 15px; display: flex; align-items: baseline; gap: 8px;
+      }
+      section.card > h2 .n {
+        display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 6px;
+        background: var(--accent); color: var(--accent-ink); font-size: 12px; font-weight: 700; flex: none;
+      }
+      section.card > .hint { color: var(--muted); font-size: 12.5px; margin: 0 0 14px 30px; }
+      .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 14px; }
+      .grid .full { grid-column: 1 / -1; }
+      label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 4px; }
+      label .opt { color: var(--muted); font-weight: 400; }
+      input[type="text"], input[type="email"], input[type="number"], select {
+        width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
+        background: var(--field); color: var(--ink); font: inherit; font-size: 14px;
+      }
+      input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+      .fieldhint { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+      .checks { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+      .checks label { font-weight: 500; display: flex; align-items: center; gap: 6px; margin: 0; }
+      .checks input { width: auto; }
+      .row-actions { margin-top: 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+      button {
+        background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 8px;
+        padding: 9px 16px; font: inherit; font-weight: 600; font-size: 14px; cursor: pointer;
+      }
+      button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+      button:disabled { opacity: 0.55; cursor: default; }
+      .toggle { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+      .toggle input { width: auto; }
+      .result { margin-top: 14px; }
+      .status-line { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 8px; }
+      .pill { font-weight: 700; font-size: 12px; padding: 2px 8px; border-radius: 999px; }
+      .pill.ok { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
+      .pill.err { background: color-mix(in srgb, var(--err) 16%, transparent); color: var(--err); }
+      .pill.pending { background: color-mix(in srgb, var(--muted) 20%, transparent); color: var(--muted); }
+      .summary { font-size: 14px; }
+      .summary a { color: var(--accent); font-weight: 600; word-break: break-all; }
+      .kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; font-size: 13.5px; margin: 8px 0; }
+      .kv dt { color: var(--muted); }
+      .kv dd { margin: 0; word-break: break-word; }
+      table { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 8px; }
+      th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+      th { color: var(--muted); font-weight: 600; }
+      td code { font-size: 12px; }
+      details { margin-top: 10px; }
+      summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
+      pre {
+        background: var(--code-bg); color: var(--code-ink); padding: 12px; border-radius: 8px;
+        overflow-x: auto; font: 12.5px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace; margin: 8px 0 0;
+      }
+      code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+      .banner {
+        background: color-mix(in srgb, var(--accent) 12%, transparent);
+        border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+        color: var(--ink); padding: 10px 12px; border-radius: 8px; font-size: 12.5px; margin: 16px 0;
+      }
+      .muted { color: var(--muted); }
+      @media (max-width: 620px) { .grid { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="wrap">
+        <h1>Screening by Burnt <span class="dot">·</span> Partner API Demo</h1>
+        <div class="sub">Provision a unit &amp; screening → start a no-login applicant screening → poll the household decision.</div>
+        <div class="config">
+          <span>Proxying to <code id="baseUrl">…</code></span>
+          <span id="keyState" class="pill-key">API key: server-side only ✓</span>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <div class="banner">
+        The browser never sees the API key — it calls this local proxy, which adds the
+        <code>Authorization: Bearer</code> header server-side. Complete a screening in the Burnt app (via the
+        <code>apply_url</code> below), then poll section 3 until a decision lands.
+      </div>
+
+      <!-- 1 ─ Create unit + screening ─────────────────────────────────────── -->
+      <section class="card">
+        <h2><span class="n">1</span> Create unit + screening</h2>
+        <p class="hint">POST <code>/api/v1/units</code>. Only <code>property_label</code> + <code>monthly_rent_cents</code> are required. Package total is a flat $20.</p>
+        <form id="unitForm">
+          <div class="grid">
+            <div class="full">
+              <label>property_label</label>
+              <input type="text" id="property_label" value="123 Main St" required />
+            </div>
+            <div>
+              <label>unit_label <span class="opt">(optional)</span></label>
+              <input type="text" id="unit_label" value="Apt 2" />
+            </div>
+            <div>
+              <label>monthly_rent_cents</label>
+              <input type="number" id="monthly_rent_cents" value="300000" min="1" required />
+              <div class="fieldhint" id="rentHint"></div>
+            </div>
+            <div>
+              <label>address_line1 <span class="opt">(optional)</span></label>
+              <input type="text" id="address_line1" value="123 Main St" />
+            </div>
+            <div>
+              <label>city <span class="opt">(optional)</span></label>
+              <input type="text" id="city" value="Austin" />
+            </div>
+            <div>
+              <label>state <span class="opt">(optional)</span></label>
+              <input type="text" id="state" value="TX" />
+            </div>
+            <div>
+              <label>postal_code <span class="opt">(optional)</span></label>
+              <input type="text" id="postal_code" value="78701" />
+            </div>
+            <div>
+              <label>country <span class="opt">(optional)</span></label>
+              <input type="text" id="country" value="US" />
+            </div>
+            <div>
+              <label>bedrooms <span class="opt">(optional)</span></label>
+              <input type="number" id="bedrooms" value="2" min="0" max="20" />
+            </div>
+            <div class="full">
+              <label>component_ids</label>
+              <div class="checks" id="components">
+                <label><input type="checkbox" value="identity" checked /> identity</label>
+                <label><input type="checkbox" value="employment" /> employment</label>
+                <label><input type="checkbox" value="income" checked /> income</label>
+                <label><input type="checkbox" value="credit" checked /> credit</label>
+                <label><input type="checkbox" value="evictions" checked /> evictions</label>
+                <label><input type="checkbox" value="background" /> background</label>
+              </div>
+              <div class="fieldhint">Uncheck all to create a bare unit (no screening; <code>application</code> comes back <code>null</code>).</div>
+            </div>
+            <div>
+              <label>applicant_pays_cents</label>
+              <input type="number" id="applicant_pays_cents" value="2000" min="0" />
+              <div class="fieldhint" id="paysHint"></div>
+            </div>
+            <div>
+              <label>fee_payer</label>
+              <select id="fee_payer">
+                <option value="applicant" selected>applicant</option>
+                <option value="operator">operator</option>
+              </select>
+            </div>
+            <div class="full">
+              <label>payment_method_id <span class="opt">(optional; top-level)</span></label>
+              <input type="text" id="payment_method_id" placeholder="pm_… from a card saved in the Burnt dashboard" />
+              <div class="fieldhint" id="pmHint">Required when the landlord owes &gt; $0 — i.e. <code>operator</code> mode, or <code>applicant</code> with pays &lt; $20.</div>
+            </div>
+          </div>
+          <div class="row-actions">
+            <button type="submit">Create unit</button>
+          </div>
+        </form>
+        <div class="result" id="unitResult"></div>
+      </section>
+
+      <!-- 2 ─ Start no-login screening ─────────────────────────────────────── -->
+      <section class="card">
+        <h2><span class="n">2</span> Start no-login screening</h2>
+        <p class="hint">POST <code>/api/v1/units/{unitId}/screenings</code>. Only <code>applicant_email</code> is required. Re-calling with the same <code>external_id</code> re-issues the same screening.</p>
+        <form id="screeningForm">
+          <div class="grid">
+            <div class="full">
+              <label>unit_id <span class="opt">(from step 1, editable)</span></label>
+              <input type="text" id="screen_unit_id" placeholder="unit_…" />
+            </div>
+            <div>
+              <label>applicant_email</label>
+              <input type="email" id="applicant_email" value="jane@example.com" required />
+            </div>
+            <div>
+              <label>applicant_name <span class="opt">(optional)</span></label>
+              <input type="text" id="applicant_name" value="Jane Doe" />
+            </div>
+            <div class="full">
+              <label>external_id <span class="opt">(optional — your stable user id; dedupe key)</span></label>
+              <input type="text" id="external_id" value="partner-user-001" />
+            </div>
+          </div>
+          <div class="row-actions">
+            <button type="submit">Start screening</button>
+          </div>
+        </form>
+        <div class="result" id="screeningResult"></div>
+      </section>
+
+      <!-- 3 ─ Poll status ──────────────────────────────────────────────────── -->
+      <section class="card">
+        <h2><span class="n">3</span> Poll application-group status</h2>
+        <p class="hint">GET <code>/api/v1/application-groups/{id}</code>. No PII — status, decision, and per-member verification only.</p>
+        <form id="groupForm">
+          <div class="grid">
+            <div class="full">
+              <label>application_group_id <span class="opt">(from step 2, editable)</span></label>
+              <input type="text" id="group_id" placeholder="grp_…" />
+            </div>
+          </div>
+          <div class="row-actions">
+            <button type="submit">Refresh</button>
+            <label class="toggle"><input type="checkbox" id="autopoll" /> auto-poll every 5s</label>
+            <span class="muted" id="pollNote"></span>
+          </div>
+        </form>
+        <div class="result" id="groupResult"></div>
+      </section>
+
+      <!-- Webhooks (optional) ──────────────────────────────────────────────── -->
+      <section class="card">
+        <h2><span class="n">✓</span> Webhooks received (server)</h2>
+        <p class="hint">Verified events this proxy has received at <code>/webhooks/burnt</code>. Usually empty locally — see the README (needs a public HTTPS tunnel + dashboard config; the group-completed event rides a cron that doesn't run under local dev). Polling above is the reliable local path.</p>
+        <div class="row-actions">
+          <button type="button" class="secondary" id="refreshHooks">Refresh</button>
+        </div>
+        <div class="result" id="hooksResult"></div>
+      </section>
+    </main>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const num = (v) => (v === '' || v == null ? undefined : Number(v));
+      const str = (v) => { const t = (v ?? '').trim(); return t === '' ? undefined : t; };
+      const dollars = (cents) => (Number.isFinite(cents) ? '$' + (cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—');
+      const prune = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
+      const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+      // Call the local proxy. Returns { status, json, networkError? }.
+      async function api(method, url, body) {
+        try {
+          const res = await fetch(url, {
+            method,
+            headers: body ? { 'Content-Type': 'application/json' } : undefined,
+            body: body ? JSON.stringify(body) : undefined,
+          });
+          let json = null;
+          try { json = await res.json(); } catch { /* non-JSON */ }
+          return { status: res.status, json };
+        } catch (err) {
+          return { status: 0, json: { error: 'Request to the local proxy failed', detail: String(err) }, networkError: true };
+        }
+      }
+
+      function statusPill(status) {
+        if (status === 0) return '<span class="pill err">NETWORK</span>';
+        const cls = status < 400 ? 'ok' : 'err';
+        return `<span class="pill ${cls}">${status}</span>`;
+      }
+
+      // Render: status pill + optional summary HTML + collapsible raw JSON.
+      function render(el, status, json, summaryHtml) {
+        el.innerHTML =
+          `<div class="status-line">${statusPill(status)}<span>${status < 400 && status !== 0 ? 'OK' : 'Error'}</span></div>` +
+          (summaryHtml || '') +
+          `<details${status >= 400 || status === 0 ? ' open' : ''}><summary>Raw JSON response</summary><pre>${esc(JSON.stringify(json, null, 2))}</pre></details>`;
+      }
+
+      // ── Live hints ──
+      const updateHints = () => {
+        $('rentHint').textContent = '= ' + dollars(num($('monthly_rent_cents').value));
+        const pays = num($('applicant_pays_cents').value);
+        $('paysHint').textContent = 'applicant pays ' + dollars(pays) + ' · landlord owes ' + dollars(Math.max(0, 2000 - (pays ?? 0)));
+      };
+      $('monthly_rent_cents').addEventListener('input', updateHints);
+      $('applicant_pays_cents').addEventListener('input', updateHints);
+      $('fee_payer').addEventListener('change', () => {
+        if ($('fee_payer').value === 'operator') { $('applicant_pays_cents').value = 0; }
+        updateHints();
+      });
+      updateHints();
+
+      // ── 1. Create unit ──
+      $('unitForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const components = [...document.querySelectorAll('#components input:checked')].map((c) => c.value);
+        const body = prune({
+          property_label: str($('property_label').value),
+          unit_label: str($('unit_label').value),
+          monthly_rent_cents: num($('monthly_rent_cents').value),
+          address_line1: str($('address_line1').value),
+          city: str($('city').value),
+          state: str($('state').value),
+          postal_code: str($('postal_code').value),
+          country: str($('country').value),
+          bedrooms: num($('bedrooms').value),
+          payment_method_id: str($('payment_method_id').value),
+        });
+        if (components.length) {
+          body.screening = prune({
+            component_ids: components,
+            applicant_pays_cents: num($('applicant_pays_cents').value) ?? 2000,
+            fee_payer: $('fee_payer').value,
+          });
+        }
+        $('unitResult').innerHTML = '<span class="muted">Creating…</span>';
+        const { status, json } = await api('POST', '/api/create-unit', body);
+        let summary = '';
+        if (status < 400 && json?.unit) {
+          const url = json.application?.application_url;
+          $('screen_unit_id').value = json.unit.id;
+          summary =
+            `<dl class="kv"><dt>unit id</dt><dd><code>${esc(json.unit.id)}</code></dd>` +
+            `<dt>screening_configured</dt><dd>${json.unit.screening_configured}</dd>` +
+            (url
+              ? `<dt>application_url</dt><dd><a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a></dd>`
+              : `<dt>application</dt><dd class="muted">null (no screening package configured)</dd>`) +
+            `</dl>`;
+        }
+        render($('unitResult'), status, json, summary);
+      });
+
+      // ── 2. Start screening ──
+      $('screeningForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const body = prune({
+          unit_id: str($('screen_unit_id').value),
+          applicant_email: str($('applicant_email').value),
+          applicant_name: str($('applicant_name').value),
+          external_id: str($('external_id').value),
+        });
+        $('screeningResult').innerHTML = '<span class="muted">Starting…</span>';
+        const { status, json } = await api('POST', '/api/start-screening', body);
+        let summary = '';
+        if (status < 400 && json?.apply_url) {
+          $('group_id').value = json.application_group_id || '';
+          // Deliver apply_url EXACTLY as returned — assign to href directly, never re-encode the #fragment.
+          const a = document.createElement('a');
+          a.href = json.apply_url;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.textContent = json.apply_url;
+          summary =
+            `<dl class="kv"><dt>application_group_id</dt><dd><code>${esc(json.application_group_id)}</code></dd>` +
+            `<dt>application_id</dt><dd><code>${esc(json.application_id)}</code></dd>` +
+            `<dt>apply_url</dt><dd id="applyUrlCell"></dd></dl>` +
+            `<div class="fieldhint">Open this as the applicant to complete the screening (new tab).</div>`;
+          $('screeningResult').innerHTML = '';
+          render($('screeningResult'), status, json, summary);
+          $('applyUrlCell').appendChild(a);
+          return;
+        }
+        render($('screeningResult'), status, json, summary);
+      });
+
+      // ── 3. Poll group ──
+      let pollTimer = null;
+      async function pollGroup() {
+        const id = str($('group_id').value);
+        if (!id) { $('groupResult').innerHTML = '<span class="muted">Enter an application_group_id first.</span>'; return; }
+        const { status, json } = await api('GET', '/api/group/' + encodeURIComponent(id));
+        let summary = '';
+        if (status < 400 && json?.id) {
+          const rows = (json.applicants || [])
+            .map((a) => `<tr><td><code>${esc(a.id)}</code></td><td>${esc(a.status)}</td><td>${esc(a.verification_status ?? '—')}</td><td>${esc(a.role)}</td></tr>`)
+            .join('');
+          const dec = json.decision;
+          summary =
+            `<dl class="kv">` +
+            `<dt>status</dt><dd><strong>${esc(json.status)}</strong></dd>` +
+            `<dt>passes_threshold</dt><dd>${json.passes_threshold === null ? '—' : json.passes_threshold}</dd>` +
+            `<dt>decision</dt><dd>${dec ? `<strong>${esc(dec.decision)}</strong>${dec.reason_codes?.length ? ' · ' + esc(dec.reason_codes.join(', ')) : ''}` : '<span class="muted">pending</span>'}</dd>` +
+            `</dl>` +
+            `<table><thead><tr><th>applicant (link id)</th><th>status</th><th>verification</th><th>role</th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="muted">no applicants yet</td></tr>'}</tbody></table>`;
+        }
+        render($('groupResult'), status, json, summary);
+      }
+      $('groupForm').addEventListener('submit', (e) => { e.preventDefault(); pollGroup(); });
+      $('autopoll').addEventListener('change', () => {
+        clearInterval(pollTimer);
+        if ($('autopoll').checked) {
+          pollGroup();
+          pollTimer = setInterval(pollGroup, 5000);
+          $('pollNote').textContent = 'auto-polling…';
+        } else {
+          $('pollNote').textContent = '';
+        }
+      });
+
+      // ── Webhooks ──
+      async function refreshHooks() {
+        const { status, json } = await api('GET', '/api/webhooks');
+        const items = json?.data ?? [];
+        const rows = items
+          .map((w) => {
+            const mark = /verified/.test(w.outcome) ? '✓' : /rejected|not set|not verified/.test(w.outcome) ? '✕' : '·';
+            return `<tr><td>${esc(new Date(w.received_at).toLocaleTimeString())}</td><td>${esc(w.event_type ?? '—')}</td><td>${mark} ${esc(w.outcome)}</td><td><code>${esc(w.delivery_id ?? '—')}</code></td></tr>`;
+          })
+          .join('');
+        const summary =
+          `<div class="fieldhint">secret configured: ${json?.webhookSecretConfigured ? 'yes' : 'no'} · ${items.length} received</div>` +
+          (items.length
+            ? `<table><thead><tr><th>time</th><th>event</th><th>outcome</th><th>delivery</th></tr></thead><tbody>${rows}</tbody></table>`
+            : '<div class="fieldhint muted">none yet — set the tunnel + dashboard URL + secret, then click “Send test” in the dashboard.</div>');
+        render($('hooksResult'), status, json, summary);
+      }
+      $('refreshHooks').addEventListener('click', refreshHooks);
+
+      // ── Init: base URL + prefill last ids ──
+      (async () => {
+        const { json } = await api('GET', '/api/state');
+        if (json?.baseUrl) $('baseUrl').textContent = json.baseUrl;
+        if (json && json.hasKey === false) {
+          $('keyState').className = 'pill err';
+          $('keyState').textContent = 'API key: NOT SET in .env';
+        }
+        if (json?.lastUnitId) $('screen_unit_id').value = json.lastUnitId;
+        if (json?.lastGroupId) $('group_id').value = json.lastGroupId;
+      })();
+    </script>
+  </body>
+</html>

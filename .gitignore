@@ -1,0 +1,11 @@
+# Secrets — NEVER commit these
+.env
+BUILD_PROMPT.md
+
+# Node
+node_modules/
+npm-debug.log*
+*.log
+
+# OS
+.DS_Store
