@@ -7,6 +7,8 @@ household (application-group) status and decision.
 - **`server.js`** — an Express **proxy**. The browser talks only to this server; this server holds the
   `bvk_` API key and makes the real Burnt calls with it.
 - **`public/index.html`** — a single vanilla-JS page (three sections + raw-JSON viewers).
+- **[`docs/PARTNER_API.md`](docs/PARTNER_API.md)** — the full Partner API reference (endpoints,
+  request/response shapes, webhook signatures, error codes) that this harness exercises.
 
 ## Security model (the one rule that matters)
 
