@@ -212,8 +212,15 @@
             </div>
             <div class="full">
               <label>payment_method_id <span class="opt">(optional; top-level)</span></label>
-              <input type="text" id="payment_method_id" placeholder="pm_… from a card saved in the Burnt dashboard" />
-              <div class="fieldhint" id="pmHint">Required when the landlord owes &gt; $0 — i.e. <code>operator</code> mode, or <code>applicant</code> with pays &lt; $20.</div>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                <select id="pmSelect" style="flex: 1; min-width: 220px;">
+                  <option value="">— none (applicant pays full $20) —</option>
+                  <option value="__manual__">Enter an id manually…</option>
+                </select>
+                <button type="button" class="secondary" id="pmReload">↻ Load saved cards</button>
+              </div>
+              <input type="text" id="payment_method_id" placeholder="pm_… (pick a card above, or paste an id)" style="margin-top: 6px;" />
+              <div class="fieldhint" id="pmHint">Required when the landlord owes &gt; $0 — i.e. <code>operator</code> mode, or <code>applicant</code> with pays &lt; $20. Load your saved cards, or paste an id from the dashboard (Settings → Billing).</div>
             </div>
           </div>
           <div class="row-actions">
@@ -342,10 +349,50 @@
       $('monthly_rent_cents').addEventListener('input', updateHints);
       $('applicant_pays_cents').addEventListener('input', updateHints);
       $('fee_payer').addEventListener('change', () => {
-        if ($('fee_payer').value === 'operator') { $('applicant_pays_cents').value = 0; }
+        if ($('fee_payer').value === 'operator') {
+          $('applicant_pays_cents').value = 0;
+          loadPaymentMethods(); // operator needs a saved card — surface them
+        }
         updateHints();
       });
       updateHints();
+
+      // ── Payment-method picker: fill payment_method_id from GET /api/payment-methods ──
+      async function loadPaymentMethods() {
+        const sel = $('pmSelect');
+        $('pmReload').disabled = true;
+        const { status, json } = await api('GET', '/api/payment-methods');
+        $('pmReload').disabled = false;
+        if (status >= 400 || !Array.isArray(json?.data)) {
+          $('pmHint').innerHTML =
+            `Couldn't load saved cards (HTTP ${status}${status === 404 ? ' — endpoint not deployed on this environment yet' : ''}). ` +
+            'Paste a <code>payment_method_id</code> manually (dashboard → Settings → Billing).';
+          return;
+        }
+        const cards = json.data;
+        sel.innerHTML =
+          '<option value="">— none (applicant pays full $20) —</option>' +
+          cards
+            .map(
+              (m) =>
+                `<option value="${esc(m.id)}">${esc(m.brand ?? 'card')} •••• ${esc(m.last4 ?? '????')}` +
+                `${m.is_default ? ' (default)' : ''} — ${esc(m.id)}</option>`,
+            )
+            .join('') +
+          '<option value="__manual__">Enter an id manually…</option>';
+        $('pmHint').textContent = cards.length
+          ? `${cards.length} saved card(s). Pick one to fill payment_method_id, or choose “Enter manually”.`
+          : 'No saved cards on this company — add one in the dashboard (Settings → Billing), or paste an id.';
+      }
+      $('pmReload').addEventListener('click', loadPaymentMethods);
+      $('pmSelect').addEventListener('change', () => {
+        const v = $('pmSelect').value;
+        if (v === '__manual__') {
+          $('payment_method_id').focus();
+          return;
+        }
+        $('payment_method_id').value = v; // '' for none, else the card id
+      });
 
       // ── 1. Create unit ──
       $('unitForm').addEventListener('submit', async (e) => {

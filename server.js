@@ -141,6 +141,15 @@ app.get(
   }),
 );
 
+// 4b) List the company's saved payment methods (to resolve a payment_method_id for operator/split units).
+app.get(
+  '/api/payment-methods',
+  proxy(async (_req, res) => {
+    const { status, json } = await burntFetch('GET', '/api/v1/payment-methods');
+    res.status(status).json(json);
+  }),
+);
+
 // 5) Start a NO-LOGIN screening for one applicant (Model B). unit_id comes from the body or the
 //    last-created unit. Only applicant_email is required; name/external_id are optional.
 app.post(
