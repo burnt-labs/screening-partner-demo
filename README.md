@@ -76,12 +76,12 @@ Every call shows the raw JSON response in a collapsible block, and errors surfac
 
 ## Fee modes (section 1)
 
-Package total is a flat **$20 (2000 cents)**.
+The screening package has a single total (**currently $20 / 2000 cents**), split between the applicant and the landlord via `fee_payer`.
 
-- **`fee_payer: applicant`** with **`applicant_pays_cents: 2000`** → landlord owes $0 → **no saved card
+- **`fee_payer: applicant`** with **`applicant_pays_cents`** set to the full package total → landlord owes $0 → **no saved card
   needed.** This is the simplest end-to-end path.
-- **`fee_payer: operator`** (operator prepays the whole $20; applicant is never charged) **or** any
-  `applicant` split where `applicant_pays_cents < 2000` → the landlord owes > $0, which **requires a
+- **`fee_payer: operator`** (operator prepays the whole package; applicant is never charged) **or** any
+  `applicant` split where `applicant_pays_cents` is below the package total → the landlord owes > $0, which **requires a
   `payment_method_id`** (a top-level field, sibling of `screening`).
 
 The Partner API **cannot add cards.** To get a `payment_method_id`, save a card in the **Burnt dashboard**
@@ -90,7 +90,7 @@ endpoint, so the card must be attached **at unit-create time** for a later landl
 
 > **Scenario — you collect payment in your own app.** If you charge your applicants in your own checkout
 > (your own merchant-of-record) and just want Burnt's fee covered, use `fee_payer: operator` with your
-> saved `payment_method_id`: Burnt charges *you* the flat $20 up front and the applicant is never charged
+> saved `payment_method_id`: Burnt charges *you* the package total up front and the applicant is never charged
 > by Burnt. Full walkthrough → [Paying for your applicants](docs/PARTNER_API.md#paying-for-your-applicants-you-collect-payment-in-your-own-app).
 
 ## Webhooks (optional — polling is the reliable local path)
@@ -181,7 +181,7 @@ programmatically. What to change:
   the delivery-id dedupe with a durable store (DB / Redis) so retries are handled exactly once. Poll
   `GET /application-groups/{id}` as a fallback.
 - **Fees & payment — mind the limitation.** The Partner API **cannot add cards.** `fee_payer: applicant`
-  paying the full $20 needs no card. But `fee_payer: operator` and any split where the landlord owes more
+  covering the whole package needs no card. But `fee_payer: operator` and any split where the landlord owes more
   than $0 need a `payment_method_id` for a card **already saved in the Burnt dashboard** — so operator-pays
   can't be fully automated via the API today. Plan for that step in the dashboard, or talk to Burnt about
   your billing model.

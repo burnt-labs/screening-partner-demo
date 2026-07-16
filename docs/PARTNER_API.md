@@ -63,15 +63,15 @@ Provide the structured address fields (`address_line1`, `city`, `state`, `postal
 the duplicate-address guard keys off them, so `city`/`state`/`postal_code` alone can false-positive
 against other units in the same zip.
 
-**Payment.** The package total is a flat $20. Who pays is controlled by `fee_payer` in the `screening`
+**Payment.** The screening package has a single total (**currently $20**). Who pays is controlled by `fee_payer` in the `screening`
 object:
 
 - `"fee_payer": "applicant"` (default) — the applicant pays `applicant_pays_cents` in Burnt's flow and
-  the landlord covers the remainder. If the landlord owes anything (`applicant_pays_cents` < $20),
+  the landlord covers the remainder. If the landlord owes anything (`applicant_pays_cents` below the package total),
   include a `payment_method_id` for a card already saved on the company so it can be auto-charged.
 - `"fee_payer": "operator"` — **you cover the whole fee and the applicant is never charged.** The
   applicant payment step is hidden; the company's card on file (`payment_method_id`) is charged the
-  full $20 **up front**, before the applicant runs the screening / identity / income steps. Requires a
+  the full package total **up front**, before the applicant runs the screening / identity / income steps. Requires a
   saved `payment_method_id`. Use this when you collect payment from your own applicants in your own
   checkout and settle with Burnt.
 
@@ -341,11 +341,11 @@ not a person id, and carries no PII.
 
 Some partners charge their applicants **inside their own app** — their own checkout, their own
 merchant-of-record — and don't want Burnt to charge the applicant at all. That's `fee_payer: "operator"`:
-**you cover Burnt's flat $20 per screening from your company card on file, and the applicant never sees a
+**you cover Burnt's per-screening fee (currently $20) from your company card on file, and the applicant never sees a
 Burnt payment step.**
 
 Burnt isn't involved in what you charge your user — that transaction happens entirely in your app. Burnt
-only charges **you** the flat $20 per screening; what you collect from the applicant, and how, is up to you.
+only charges **you** its per-screening fee; what you collect from the applicant, and how, is up to you.
 
 **1) Save a card (one-time).** The Partner API can't add cards, but it can list them. In the Burnt
 dashboard go to **Settings → Billing** and save a company card, then read its `payment_method_id` from
@@ -375,7 +375,7 @@ only if that unit already had a card attached at creation.)
 
 **3) Start the screening as usual.** Nothing changes for you here — call
 `POST /api/v1/units/{unitId}/screenings` and hand the applicant the returned `apply_url`. Burnt charges
-your saved card the flat $20 **up front, the moment the applicant begins their screening**, before any
+your saved card the package total **up front, the moment the applicant begins their screening**, before any
 checks (identity / income / credit) run. The charge is **idempotent per application**, so re-issuing the
 `apply_url` for the same applicant never double-charges.
 
@@ -387,7 +387,7 @@ Because a unit's card can't be repointed via the API, the fix is to keep the sav
 new `payment_method_id`.
 
 > **Reconciliation is on your side.** There is no API today to reconcile what you charged your applicant
-> against Burnt's $20 — you charge your user in your app; Burnt charges you $20 per screening. Deeper
+> against Burnt's fee — you charge your user in your app; Burnt charges you its per-screening fee. Deeper
 > partner-controlled payment / merchant-of-record settlement is on the roadmap.
 
 ## Webhooks

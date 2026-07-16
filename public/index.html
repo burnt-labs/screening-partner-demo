@@ -146,7 +146,7 @@
       <!-- 1 ─ Create unit + screening ─────────────────────────────────────── -->
       <section class="card">
         <h2><span class="n">1</span> Create unit + screening</h2>
-        <p class="hint">POST <code>/api/v1/units</code>. Only <code>property_label</code> + <code>monthly_rent_cents</code> are required. Package total is a flat $20.</p>
+        <p class="hint">POST <code>/api/v1/units</code>. Only <code>property_label</code> + <code>monthly_rent_cents</code> are required. The package total is split between applicant and landlord via <code>fee_payer</code>.</p>
         <form id="unitForm">
           <div class="grid">
             <div class="full">
@@ -214,13 +214,13 @@
               <label>payment_method_id <span class="opt">(optional; top-level)</span></label>
               <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
                 <select id="pmSelect" style="flex: 1; min-width: 220px;">
-                  <option value="">— none (applicant pays full $20) —</option>
+                  <option value="">— none (applicant pays the full package) —</option>
                   <option value="__manual__">Enter an id manually…</option>
                 </select>
                 <button type="button" class="secondary" id="pmReload">↻ Load saved cards</button>
               </div>
               <input type="text" id="payment_method_id" placeholder="pm_… (pick a card above, or paste an id)" style="margin-top: 6px;" />
-              <div class="fieldhint" id="pmHint">Required when the landlord owes &gt; $0 — i.e. <code>operator</code> mode, or <code>applicant</code> with pays &lt; $20. Load your saved cards, or paste an id from the dashboard (Settings → Billing).</div>
+              <div class="fieldhint" id="pmHint">Required when the landlord owes &gt; $0 — i.e. <code>operator</code> mode, or <code>applicant</code> with pays below the package total. Load your saved cards, or paste an id from the dashboard (Settings → Billing).</div>
             </div>
           </div>
           <div class="row-actions">
@@ -340,11 +340,14 @@
           `<details${status >= 400 || status === 0 ? ' open' : ''}><summary>Raw JSON response</summary><pre>${esc(JSON.stringify(json, null, 2))}</pre></details>`;
       }
 
+      // Current screening-package total (cents). Burnt sets the per-screening fee — update if it changes.
+      const PACKAGE_TOTAL_CENTS = 2000;
+
       // ── Live hints ──
       const updateHints = () => {
         $('rentHint').textContent = '= ' + dollars(num($('monthly_rent_cents').value));
         const pays = num($('applicant_pays_cents').value);
-        $('paysHint').textContent = 'applicant pays ' + dollars(pays) + ' · landlord owes ' + dollars(Math.max(0, 2000 - (pays ?? 0)));
+        $('paysHint').textContent = 'applicant pays ' + dollars(pays) + ' · landlord owes ' + dollars(Math.max(0, PACKAGE_TOTAL_CENTS - (pays ?? 0)));
       };
       $('monthly_rent_cents').addEventListener('input', updateHints);
       $('applicant_pays_cents').addEventListener('input', updateHints);
@@ -371,7 +374,7 @@
         }
         const cards = json.data;
         sel.innerHTML =
-          '<option value="">— none (applicant pays full $20) —</option>' +
+          '<option value="">— none (applicant pays the full package) —</option>' +
           cards
             .map(
               (m) =>
@@ -413,7 +416,7 @@
         if (components.length) {
           body.screening = prune({
             component_ids: components,
-            applicant_pays_cents: num($('applicant_pays_cents').value) ?? 2000,
+            applicant_pays_cents: num($('applicant_pays_cents').value) ?? PACKAGE_TOTAL_CENTS,
             fee_payer: $('fee_payer').value,
           });
         }
