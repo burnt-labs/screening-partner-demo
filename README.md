@@ -88,6 +88,11 @@ The Partner API **cannot add cards.** To get a `payment_method_id`, save a card 
 first (Settings → Billing), then paste its id into the `payment_method_id` field. There is no unit-update
 endpoint, so the card must be attached **at unit-create time** for a later landlord-paid rule set to work.
 
+> **Scenario — you collect payment in your own app.** If you charge your applicants in your own checkout
+> (your own merchant-of-record) and just want Burnt's fee covered, use `fee_payer: operator` with your
+> saved `payment_method_id`: Burnt charges *you* the flat $20 up front and the applicant is never charged
+> by Burnt. Full walkthrough → [Paying for your applicants](docs/PARTNER_API.md#paying-for-your-applicants-you-collect-payment-in-your-own-app).
+
 ## Webhooks (optional — polling is the reliable local path)
 
 `server.js` includes a `POST /webhooks/burnt` receiver that verifies Burnt's signature

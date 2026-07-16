@@ -77,6 +77,9 @@ object:
 
 (There is no per-package minimum — `applicant_pays_cents` can be any value ≥ 0.)
 
+To get a `payment_method_id`, save a card in the dashboard (**Settings → Billing**), then look it up with
+[`GET /api/v1/payment-methods`](#list-saved-payment-methods) — the API can't add cards, only list them.
+
 **201**
 
 ```json
@@ -108,6 +111,40 @@ GET /api/v1/units/{unitId}   → a single unit (404 if it isn't yours)
 > **Pagination & rate limits.** This reference doesn't specify how `GET /units` paginates at scale, or
 > what rate limits apply. Confirm current behavior with your Burnt contact before building list-heavy or
 > high-volume flows.
+
+### List saved payment methods
+
+```
+GET /api/v1/payment-methods
+```
+
+Returns the company's active saved cards so you can resolve a `payment_method_id` to attach to an
+operator-paid (or landlord-split) unit. **Read-only** — cards are added and removed in the dashboard
+(**Settings → Billing**); the API never returns raw Stripe identifiers.
+
+**200**
+
+```json
+{
+  "data": [
+    {
+      "id": "pm_abc123",
+      "brand": "visa",
+      "last4": "4242",
+      "exp_month": 12,
+      "exp_year": 2027,
+      "is_default": true,
+      "linked_unit_count": 2,
+      "created_at": "2026-07-13T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+Pass a method's `id` as the top-level `payment_method_id` when you **Create a unit** — the card is attached
+at unit-create time (there's no unit-update endpoint, and the rule-set call can't set or change it). This
+`id` is Burnt's own payment-method id: it shares the `pm_` prefix with Stripe's PaymentMethod ids but is
+**not** a Stripe identifier — use it only as Burnt's `payment_method_id`.
 
 ### Configure a unit's screening
 
@@ -299,6 +336,59 @@ co-signer / guarantor — so its length is the household size, and each entry ca
 not a person id, and carries no PII.
 
 **404** — unknown group, or a group belonging to another company.
+
+## Paying for your applicants (you collect payment in your own app)
+
+Some partners charge their applicants **inside their own app** — their own checkout, their own
+merchant-of-record — and don't want Burnt to charge the applicant at all. That's `fee_payer: "operator"`:
+**you cover Burnt's flat $20 per screening from your company card on file, and the applicant never sees a
+Burnt payment step.**
+
+Burnt isn't involved in what you charge your user — that transaction happens entirely in your app. Burnt
+only charges **you** the flat $20 per screening; what you collect from the applicant, and how, is up to you.
+
+**1) Save a card (one-time).** The Partner API can't add cards, but it can list them. In the Burnt
+dashboard go to **Settings → Billing** and save a company card, then read its `payment_method_id` from
+[`GET /api/v1/payment-methods`](#list-saved-payment-methods) (or the dashboard). You pass that id when you
+create units.
+
+**2) Create units operator-paid.** Attach the card and set `fee_payer: "operator"` at unit-create time.
+`payment_method_id` is a **top-level** field (a sibling of `screening`, not inside it), and there is no
+unit-update endpoint — a landlord-paid rule set reads the card off the unit, so it must be present from
+creation:
+
+```json
+POST /api/v1/units
+{
+  "property_label": "123 Main St",
+  "monthly_rent_cents": 300000,
+  "address_line1": "123 Main St", "city": "Austin", "state": "TX", "postal_code": "78701", "country": "US",
+  "payment_method_id": "pm_abc123",
+  "screening": { "component_ids": ["credit", "evictions", "income"], "fee_payer": "operator" }
+}
+```
+
+In `operator` mode `applicant_pays_cents` is forced to `0` (you can omit it). Omitting the card returns
+`400 { "error": "payment_method_id is required when the landlord pays part of the package" }`. (You can
+also switch an existing unit with `POST /api/v1/units/{unitId}/rule-set` + `fee_payer: "operator"`, but
+only if that unit already had a card attached at creation.)
+
+**3) Start the screening as usual.** Nothing changes for you here — call
+`POST /api/v1/units/{unitId}/screenings` and hand the applicant the returned `apply_url`. Burnt charges
+your saved card the flat $20 **up front, the moment the applicant begins their screening**, before any
+checks (identity / income / credit) run. The charge is **idempotent per application**, so re-issuing the
+`apply_url` for the same applicant never double-charges.
+
+**Keep a valid card on file.** If the card is missing, inactive, or the charge declines when the applicant
+begins, their screening is **blocked** until it's resolved — the applicant's paid step returns `402` with
+`OPERATOR_PAYMENT_METHOD_REQUIRED`, `OPERATOR_PAYMENT_METHOD_UNAVAILABLE`, or `OPERATOR_PAYMENT_FAILED`.
+Because a unit's card can't be repointed via the API, the fix is to keep the saved card valid (dashboard →
+**Settings → Billing**) and, if you need a different card, provision a fresh operator-paid unit with the
+new `payment_method_id`.
+
+> **Reconciliation is on your side.** There is no API today to reconcile what you charged your applicant
+> against Burnt's $20 — you charge your user in your app; Burnt charges you $20 per screening. Deeper
+> partner-controlled payment / merchant-of-record settlement is on the roadmap.
 
 ## Webhooks
 
