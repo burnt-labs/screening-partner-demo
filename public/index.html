@@ -126,7 +126,7 @@
     <header>
       <div class="wrap">
         <h1>Screening by Burnt <span class="dot">·</span> Partner API Demo</h1>
-        <div class="sub">Provision a unit &amp; screening → start a no-login applicant screening → poll the household decision.</div>
+        <div class="sub">Provision a unit &amp; screening → start a no-login applicant screening → get the household decision (poll or webhook).</div>
         <div class="config">
           <span>Proxying to <code id="baseUrl">…</code></span>
           <span id="keyState" class="pill-key">API key: server-side only ✓</span>
@@ -138,7 +138,9 @@
       <div class="banner">
         The browser never sees the API key — it calls this local proxy, which adds the
         <code>Authorization: Bearer</code> header server-side. Complete a screening in the Burnt app (via the
-        <code>apply_url</code> below), then poll section 3 until a decision lands.
+        <code>apply_url</code> below), then get the result <strong>either way</strong>: <strong>poll</strong>
+        (section 3 — simplest locally) or receive a <strong>webhook</strong> (section 4 — real-time, the
+        path most integrations use in production).
       </div>
 
       <!-- 1 ─ Create unit + screening ─────────────────────────────────────── -->
@@ -253,8 +255,8 @@
 
       <!-- 3 ─ Poll status ──────────────────────────────────────────────────── -->
       <section class="card">
-        <h2><span class="n">3</span> Poll application-group status</h2>
-        <p class="hint">GET <code>/api/v1/application-groups/{id}</code>. No PII — status, decision, and per-member verification only.</p>
+        <h2><span class="n">3</span> Get the result — poll</h2>
+        <p class="hint">GET <code>/api/v1/application-groups/{id}</code>. Works immediately with no setup — the simplest path locally. No PII: status, decision, and per-member verification only.</p>
         <form id="groupForm">
           <div class="grid">
             <div class="full">
@@ -273,8 +275,19 @@
 
       <!-- Webhooks (optional) ──────────────────────────────────────────────── -->
       <section class="card">
-        <h2><span class="n">✓</span> Webhooks received (server)</h2>
-        <p class="hint">Verified events this proxy has received at <code>/webhooks/burnt</code>. Usually empty locally — see the README (needs a public HTTPS tunnel + dashboard config; the group-completed event rides a cron that doesn't run under local dev). Polling above is the reliable local path.</p>
+        <h2><span class="n">4</span> Get the result — webhooks <span class="opt">· real-time</span></h2>
+        <p class="hint">Instead of polling, Burnt <strong>pushes</strong> each event to your server as it happens — the path most integrations use in production. This proxy already runs a verified receiver at <code>POST /webhooks/burnt</code>; accepted events appear below.</p>
+        <details>
+          <summary>How to enable (needs a public HTTPS URL — a webhook can't reach <code>localhost</code>)</summary>
+          <div class="fieldhint">
+            <ol>
+              <li>Expose this server: <code>cloudflared tunnel --url http://localhost:4000</code> (or <code>ngrok http 4000</code>).</li>
+              <li>Burnt dashboard → <strong>Settings → Developers → Webhooks</strong>: register <code>https://&lt;your-tunnel-host&gt;/webhooks/burnt</code> and copy the signing secret.</li>
+              <li>Put it in <code>.env</code> as <code>BURNT_WEBHOOK_SECRET</code>, restart <code>npm start</code>, then click “Send test”.</li>
+            </ol>
+            Registration is dashboard-only (an API key can't do it), and <code>application_group.completed</code> rides a cron that doesn't run under local dev — so <strong>locally, poll (section 3)</strong>. Full detail in the README.
+          </div>
+        </details>
         <div class="row-actions">
           <button type="button" class="secondary" id="refreshHooks">Refresh</button>
         </div>
