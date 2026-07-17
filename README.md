@@ -98,8 +98,9 @@ endpoint, so the card must be attached **at unit-create time** for a later landl
 `server.js` includes a `POST /webhooks/burnt` receiver that verifies Burnt's signature
 (`X-Burnt-Signature: sha256=<hex>` over `` `${timestamp}.${deliveryId}.${rawBody}` `` with
 `BURNT_WEBHOOK_SECRET`, 5-min freshness window, constant-time compare, delivery-id dedupe) and logs
-`verification.completed` / `verification.failed` / `application_group.completed`. Received events are also
-visible in the "Webhooks received" panel.
+every event Burnt sends — `verification.*`, per-applicant `application.*`, and household
+`application_group.*` (full list in [`docs/PARTNER_API.md`](docs/PARTNER_API.md#webhooks)). Received events
+are also visible in the "Webhooks received" panel.
 
 **Locally, expect this to stay empty**, because:
 

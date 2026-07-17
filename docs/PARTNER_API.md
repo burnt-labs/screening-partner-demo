@@ -326,8 +326,8 @@ data** — no applicant names, income figures, provider claims, or report payloa
 ```
 
 `status` is one of `pending | partial | error | pass | fail | archived`. `decision` is `null` until
-the operator decides. `verification_status` is one of `pending | in_progress | completed | failed |
-expired` (or `null`).
+the operator decides, then `decision.decision` is `"accepted"` or `"rejected"`. `verification_status`
+is one of `pending | in_progress | completed | failed | expired` (or `null`).
 
 The `applicants` array has **one entry per household member** — the primary plus every co-applicant /
 co-signer / guarantor — so its length is the household size, and each entry carries that person's own
@@ -399,7 +399,12 @@ events so you don't have to poll:
 | ----------------------------- | ----------------------------------------------------------------- |
 | `verification.completed`      | An individual verification check completes                        |
 | `verification.failed`         | A verification check fails                                        |
+| `application.review_required` | An applicant's check was routed to manual review (completion is delayed, not broken) |
+| `application.completed`       | One applicant's screening reached a terminal result (all their checks + reviews done) |
 | `application_group.completed` | Every applicant screening in a group has reached a terminal state |
+| `application_group.decided`   | An operator accepted or rejected the household — carries the same `decision` object as `GET /application-groups/{id}` |
+
+New event types may be added over time — **ignore any `event` you don't recognize** rather than erroring on it.
 
 **Signature verification.** Every delivery carries three headers:
 
