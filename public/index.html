@@ -17,6 +17,7 @@
         --code-ink: #d7e0ea;
         --ok: #1a7f37;
         --err: #c02626;
+        --warn: #b7791f;
         --field: #ffffff;
       }
       @media (prefers-color-scheme: dark) {
@@ -31,6 +32,7 @@
           --code-ink: #cdd6e0;
           --ok: #4ac26b;
           --err: #ff6b6b;
+          --warn: #e0a83a;
           --field: #10141a;
         }
       }
@@ -118,6 +120,10 @@
         border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
         color: var(--ink); padding: 10px 12px; border-radius: 8px; font-size: 12.5px; margin: 16px 0;
       }
+      .note { padding: 10px 12px; border-radius: 8px; font-size: 12.5px; margin: 0 0 12px; border-left: 3px solid var(--muted); color: var(--ink); }
+      .note.ok { background: color-mix(in srgb, var(--ok) 12%, transparent); border-left-color: var(--ok); }
+      .note.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); border-left-color: var(--warn); }
+      .note code { background: color-mix(in srgb, var(--muted) 16%, transparent); padding: 0 3px; border-radius: 4px; }
       .muted { color: var(--muted); }
       @media (max-width: 620px) { .grid { grid-template-columns: 1fr; } }
     </style>
@@ -233,7 +239,7 @@
       <!-- 2 ─ Start no-login screening ─────────────────────────────────────── -->
       <section class="card">
         <h2><span class="n">2</span> Start no-login screening</h2>
-        <p class="hint">POST <code>/api/v1/units/{unitId}/screenings</code>. Only <code>applicant_email</code> is required. Re-calling with the same <code>external_id</code> re-issues the same screening.</p>
+        <p class="hint">POST <code>/api/v1/units/{unitId}/screenings</code>. Only <code>applicant_email</code> is required. Re-calling with the same <code>external_id</code> re-issues that applicant's existing screening (HTTP 200) and ignores the email/name you pass; a new <code>external_id</code> creates a new screening (HTTP 201).</p>
         <form id="screeningForm">
           <div class="grid">
             <div class="full">
@@ -251,6 +257,7 @@
             <div class="full">
               <label>external_id <span class="opt">(optional — your stable user id; dedupe key)</span></label>
               <input type="text" id="external_id" value="partner-user-001" />
+              <div class="fieldhint">Stable identity / dedupe key — the same value always maps to the same applicant. Reusing it returns that applicant's existing screening and ignores the email/name above.</div>
             </div>
           </div>
           <div class="row-actions">
@@ -451,6 +458,19 @@
         let summary = '';
         if (status < 400 && json?.apply_url) {
           $('group_id').value = json.application_group_id || '';
+          // 200 = Burnt re-issued an EXISTING screening (dedup by external_id); 201 = a new one was created.
+          // external_id is the applicant identity key, so on a re-issue the email/name in THIS request are
+          // ignored and the returned screening may belong to a different applicant — surface that loudly.
+          const idLabel = body.external_id
+            ? `<code>${esc(body.external_id)}</code>`
+            : 'the email-hash fallback (no external_id sent)';
+          const submittedWho = `${esc(body.applicant_email || '—')}${body.applicant_name ? ' · ' + esc(body.applicant_name) : ''}`;
+          const note =
+            status === 201
+              ? `<div class="note ok"><strong>201 Created</strong> — a new screening for ${idLabel}.</div>`
+              : status === 200
+                ? `<div class="note warn"><strong>200 — re-issued an EXISTING screening.</strong> ${idLabel} was already used, so Burnt returned that applicant's existing screening and <strong>ignored</strong> the applicant_email / applicant_name you entered (${submittedWho}). It may belong to a different applicant — open the apply_url to confirm whose it is. Use a different external_id to create a separate screening.<br><strong>Note:</strong> this re-call also <strong>rotated the apply token</strong> — any apply_url from a previous call for this applicant is now dead; only the newest link above works.</div>`
+                : '';
           // Deliver apply_url EXACTLY as returned — assign to href directly, never re-encode the #fragment.
           const a = document.createElement('a');
           a.href = json.apply_url;
@@ -458,6 +478,7 @@
           a.rel = 'noopener';
           a.textContent = json.apply_url;
           summary =
+            note +
             `<dl class="kv"><dt>application_group_id</dt><dd><code>${esc(json.application_group_id)}</code></dd>` +
             `<dt>application_id</dt><dd><code>${esc(json.application_id)}</code></dd>` +
             `<dt>apply_url</dt><dd id="applyUrlCell"></dd></dl>` +
