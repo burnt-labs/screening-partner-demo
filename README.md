@@ -159,6 +159,11 @@ send-side error (tunnel down / wrong URL).
 
 - **`apply_url` / `application_url` are opaque** — deliver them exactly as returned; never re-encode the
   `#token=…` fragment (it authorizes the applicant client-side).
+- **The `apply_url` token rotates on every call.** `POST …/screenings` mints a **new** apply token each
+  time — even when it re-issues the same screening (HTTP `200`). Only the newest `apply_url` is valid; any
+  link from a previous call stops working (30-day token TTL). So treat `POST …/screenings` as a
+  **create-or-rotate** call, not a read: save the `apply_url` you get back and share that exact one, and
+  re-call only when you deliberately want a fresh link.
 - Error `code`s have mixed casing (`DUPLICATE_UNIT`, `API_KEY_SCOPE` vs `rule_set_exists`,
   `unit_unavailable`), and the 401 body varies — the harness displays whatever comes back, it doesn't
   assert on it.
@@ -175,6 +180,12 @@ programmatically. What to change:
   `application_group_id` the API returns on your own entity (lease, listing, applicant, user) so you can
   correlate results later. Set `external_id` on `POST …/screenings` — it's your stable user id and the
   dedupe key.
+- **Save the `apply_url`; don't re-call just to "get the link again."** The URL carries a **rotating
+  token** — every `POST …/screenings` (including an idempotent re-issue) invalidates the link the previous
+  call returned. Store the `apply_url` alongside your `application_group_id`, share that stored value, and
+  treat any re-call as a deliberate rotation: if you re-call, re-send the new link because the old one is
+  now dead. The stable ids (`application_id` / `application_group_id`) never change — keep polling and
+  webhook correlation keyed on those, never on the URL.
 - **Process webhooks durably.** The receiver in `server.js` verifies the signature correctly (raw body,
   `sha256=` HMAC, 5-min replay window, constant-time compare) — copy that as-is. But it then dedupes
   deliveries in an in-memory `Set` (`seenDeliveries`) that's lost on restart and not shared across
