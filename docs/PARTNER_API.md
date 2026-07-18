@@ -241,6 +241,13 @@ Deliver `apply_url` to the applicant as-is (email, SMS, or an in-app redirect). 
 fragment authorizes that one application; because it is a URL fragment it is never sent to the Burnt
 server in the request line. Poll `GET /api/v1/application-groups/{application_group_id}` for status.
 
+**Re-issuing rotates the token.** Each call issues a **new** apply token for the same screening and
+**invalidates the `apply_url` from the previous call** — `application_id` / `application_group_id` stay
+the same, but any link you already handed out stops working. Opening the newest `apply_url` resumes the
+*same* screening exactly where the applicant left off; nothing is reset. So treat this endpoint as
+**create-or-rotate**, not a read: store the `apply_url` you get back and re-call only when you
+deliberately want to issue a fresh link.
+
 **404** — the unit isn't yours, or has no active rule set. **410 `{ "code": "unit_unavailable" }`** —
 the unit already has an accepted application, so no new applicant can apply.
 
