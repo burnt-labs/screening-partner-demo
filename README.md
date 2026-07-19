@@ -1,6 +1,6 @@
 # Screening by Burnt — Partner API demo
 
-A tiny local app to walk the **Screening by Burnt** Partner API (Model A/B) end to end: provision a unit +
+A tiny local app to walk the **Screening by Burnt** Partner API end to end: provision a unit +
 screening, start a **no-login** screening for an applicant, get a tokenized apply URL, then poll the
 household (application-group) status and decision.
 
@@ -195,8 +195,7 @@ programmatically. What to change:
 - **Fees & payment — mind the limitation.** The Partner API **cannot add cards.** `fee_payer: applicant`
   covering the whole package needs no card. But `fee_payer: operator` and any split where the landlord owes more
   than $0 need a `payment_method_id` for a card **already saved in the Burnt dashboard** — so operator-pays
-  can't be fully automated via the API today. Plan for that step in the dashboard, or talk to Burnt about
-  your billing model.
+  can't be fully automated via the API today.
 - **Any language works.** Nothing here is Node-specific: it's plain HTTPS with an `Authorization: Bearer`
   header, and the webhook signature is a standard HMAC-SHA256 you can compute anywhere (see the
   [Python example](docs/PARTNER_API.md#webhooks) in the API reference).
