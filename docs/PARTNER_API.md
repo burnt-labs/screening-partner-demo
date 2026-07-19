@@ -71,7 +71,7 @@ object:
   include a `payment_method_id` for a card already saved on the company so it can be auto-charged.
 - `"fee_payer": "operator"` — **you cover the whole fee and the applicant is never charged.** The
   applicant payment step is hidden; the company's card on file (`payment_method_id`) is charged the
-  the full package total **up front**, before the applicant runs the screening / identity / income steps. Requires a
+  full package total **up front**, before the applicant runs the screening / identity / income steps. Requires a
   saved `payment_method_id`. Use this when you collect payment from your own applicants in your own
   checkout and settle with Burnt.
 
