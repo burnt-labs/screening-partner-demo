@@ -395,7 +395,8 @@ events so you don't have to poll:
 
 | Event                         | Fires when                                                        |
 | ----------------------------- | ----------------------------------------------------------------- |
-| `verification.completed`      | An individual verification check completes                        |
+| `screening.check.completed`   | A single check finished — `check` is one of `identity`, `credit`, `evictions`, `background`, `income`, `employment`. A real-time progress signal, fired mid-flow as each step completes (before submit) |
+| `verification.completed`      | An individual verification check completes (carries the verified data)             |
 | `verification.failed`         | A verification check fails                                        |
 | `application.review_required` | An applicant's check was routed to manual review (completion is delayed, not broken) |
 | `application.completed`       | One applicant's screening reached a terminal result (all their checks + reviews done) |
@@ -403,6 +404,10 @@ events so you don't have to poll:
 | `application_group.decided`   | An operator accepted or rejected the household — carries the same `decision` object as `GET /application-groups/{id}` |
 
 New event types may be added over time — **ignore any `event` you don't recognize** rather than erroring on it.
+
+**Correlating events to your applicant.** Every event payload carries the handles you got back when you created the screening, so you can map an event to your record without parsing the `apply_url`: `application_id` (the rental application), `group_id` (the household), and `external_id` (the id you passed on create). On group events these appear per applicant in the `applicants[]` array. All three are `null` for non-partner / reusable links.
+
+**Progress vs. result.** `screening.check.completed` is a lightweight, PII-free **progress** signal fired the instant each check finishes, mid-flow. The actual verified data still arrives only in `verification.completed` and the terminal `application.completed` / `application_group.completed`, which are released when the applicant **submits** — so a check finishing early does not leak its result.
 
 **Signature verification.** Every delivery carries three headers:
 
