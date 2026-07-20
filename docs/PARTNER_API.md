@@ -150,10 +150,12 @@ need to create a new unit just to swap the card. This
 POST /api/v1/units/{unitId}/rule-set
 ```
 
-Body: `{ "component_ids": [...], "applicant_pays_cents": 2000, "currency": "usd", "fee_payer": "applicant", "replace_active": false }`.
+Body: `{ "component_ids": [...], "applicant_pays_cents": 2000, "fee_payer": "applicant", "replace_active": false }`.
 `fee_payer` works exactly as in **Create a unit** above (`"operator"` = you cover the whole fee up front
-from the unit's saved card, applicant not charged). Returns the rule set plus the application link. If the unit already has an operator-configured active
-rule set, pass `replace_active: true` to overwrite it (otherwise `409 { "code": "rule_set_exists" }`).
+from the unit's saved card, applicant not charged). Currency is always USD and is set by Burnt — you do
+not send it (any `currency` you pass is ignored). Returns the rule set plus the application link. If the
+unit already has an operator-configured active rule set, pass `replace_active: true` to overwrite it
+(otherwise `409 { "code": "rule_set_exists" }`).
 
 **200** (replaced) / **201** (created)
 
