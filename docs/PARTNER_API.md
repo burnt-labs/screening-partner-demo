@@ -1,4 +1,4 @@
-# Screening by Burnt — Partner API (Model A)
+# Screening by Burnt — Partner API
 
 The Partner API lets your backend drive Screening by Burnt screenings headlessly: provision units, start a
 screening for a specific applicant, hand out the application link, and read results — authenticated
@@ -77,7 +77,7 @@ object:
 
 (There is no per-package minimum — `applicant_pays_cents` can be any value ≥ 0.)
 
-To get a `payment_method_id`, save a card in the dashboard (**Settings → Billing**), then look it up with
+To get a `payment_method_id`, save a card in the dashboard (**Settings → Payments**), then look it up with
 [`GET /api/v1/payment-methods`](#list-saved-payment-methods) — the API can't add cards, only list them.
 
 **201**
@@ -108,10 +108,6 @@ GET /api/v1/units            → { "data": [ { unit }, … ] }
 GET /api/v1/units/{unitId}   → a single unit (404 if it isn't yours)
 ```
 
-> **Pagination & rate limits.** This reference doesn't specify how `GET /units` paginates at scale, or
-> what rate limits apply. Confirm current behavior with your Burnt contact before building list-heavy or
-> high-volume flows.
-
 ### List saved payment methods
 
 ```
@@ -120,7 +116,7 @@ GET /api/v1/payment-methods
 
 Returns the company's active saved cards so you can resolve a `payment_method_id` to attach to an
 operator-paid (or landlord-split) unit. **Read-only** — cards are added and removed in the dashboard
-(**Settings → Billing**); the API never returns raw Stripe identifiers.
+(**Settings → Payments**); the API never returns raw Stripe identifiers.
 
 **200**
 
@@ -141,8 +137,10 @@ operator-paid (or landlord-split) unit. **Read-only** — cards are added and re
 }
 ```
 
-Pass a method's `id` as the top-level `payment_method_id` when you **Create a unit** — the card is attached
-at unit-create time (there's no unit-update endpoint, and the rule-set call can't set or change it). This
+Pass a method's `id` as the top-level `payment_method_id` when you **Create a unit**. The Partner API sets a
+unit's card only at create-time (there's no unit-update endpoint), but you can **add or change a unit's card
+in the dashboard** — open the unit → **Unit rules set → Payment method → Save payment method** — so you never
+need to create a new unit just to swap the card. This
 `id` is Burnt's own payment-method id: it shares the `pm_` prefix with Stripe's PaymentMethod ids but is
 **not** a Stripe identifier — use it only as Burnt's `payment_method_id`.
 
@@ -255,9 +253,7 @@ the unit already has an accepted application, so no new applicant can apply.
 identity**: the apply token binds the screening to the applicant you named, standing in for a Burnt
 login. The applicant still gives FCRA consent inside the Burnt flow, recorded against this application
 (consent text version + timestamp + IP/UA) and linked to the identity you supplied (`external_id` /
-email, stored as `partner_external_ref`). Before enabling this in production, obtain legal sign-off
-that partner-asserted identity plus that consent record is sufficient "who-consented" evidence for
-your use.
+email, stored as `partner_external_ref`).
 
 ### Co-applicants, co-signers & guarantors (the household)
 
@@ -285,9 +281,7 @@ What this means for your integration:
   `application_group_id` you already hold (each participant appears in the `applicants` array). You
   don't need a separate handle per participant.
 - A participant without a Burnt account is asked to create one (or sign in) when they open their
-  invitation. If you need a fully login-free experience for participants too, tell us — an opt-in
-  "tokenized participant invitations" mode is on the roadmap; it would email each participant a
-  tokenized link that runs the same no-login flow.
+  invitation.
 
 ### Read application-group status & decision
 
@@ -355,14 +349,15 @@ Burnt isn't involved in what you charge your user — that transaction happens e
 only charges **you** its per-screening fee; what you collect from the applicant, and how, is up to you.
 
 **1) Save a card (one-time).** The Partner API can't add cards, but it can list them. In the Burnt
-dashboard go to **Settings → Billing** and save a company card, then read its `payment_method_id` from
-[`GET /api/v1/payment-methods`](#list-saved-payment-methods) (or the dashboard). You pass that id when you
+dashboard go to **Settings → Payments** and save a company card, then read its `payment_method_id` from
+[`GET /api/v1/payment-methods`](#list-saved-payment-methods). You pass that id when you
 create units.
 
 **2) Create units operator-paid.** Attach the card and set `fee_payer: "operator"` at unit-create time.
-`payment_method_id` is a **top-level** field (a sibling of `screening`, not inside it), and there is no
-unit-update endpoint — a landlord-paid rule set reads the card off the unit, so it must be present from
-creation:
+`payment_method_id` is a **top-level** field (a sibling of `screening`, not inside it). Via the API you set
+the card at unit-create time (there's no unit-update endpoint); to add or change a unit's card afterward, use
+the dashboard (unit → **Unit rules set → Payment method**). A landlord-paid rule set reads the card off the
+unit:
 
 ```json
 POST /api/v1/units
@@ -377,8 +372,8 @@ POST /api/v1/units
 
 In `operator` mode `applicant_pays_cents` is forced to `0` (you can omit it). Omitting the card returns
 `400 { "error": "payment_method_id is required when the landlord pays part of the package" }`. (You can
-also switch an existing unit with `POST /api/v1/units/{unitId}/rule-set` + `fee_payer: "operator"`, but
-only if that unit already had a card attached at creation.)
+also switch an existing unit to operator with `POST /api/v1/units/{unitId}/rule-set` + `fee_payer:
+"operator"`, as long as the unit has a saved card — add or change one in the dashboard if it doesn't.)
 
 **3) Start the screening as usual.** Nothing changes for you here — call
 `POST /api/v1/units/{unitId}/screenings` and hand the applicant the returned `apply_url`. Burnt charges
@@ -389,9 +384,9 @@ checks (identity / income / credit) run. The charge is **idempotent per applicat
 **Keep a valid card on file.** If the card is missing, inactive, or the charge declines when the applicant
 begins, their screening is **blocked** until it's resolved — the applicant's paid step returns `402` with
 `OPERATOR_PAYMENT_METHOD_REQUIRED`, `OPERATOR_PAYMENT_METHOD_UNAVAILABLE`, or `OPERATOR_PAYMENT_FAILED`.
-Because a unit's card can't be repointed via the API, the fix is to keep the saved card valid (dashboard →
-**Settings → Billing**) and, if you need a different card, provision a fresh operator-paid unit with the
-new `payment_method_id`.
+The Partner API can't change a unit's card, but the **dashboard can** — open the unit → **Unit rules set →
+Payment method**, pick a different saved card, and **Save payment method** (add cards under **Settings →
+Payments**). No need to create a new unit.
 
 > **Reconciliation is on your side.** There is no API today to reconcile what you charged your applicant
 > against Burnt's fee — you charge your user in your app; Burnt charges you its per-screening fee. Deeper

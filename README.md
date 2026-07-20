@@ -85,8 +85,9 @@ The screening package has a single total (**currently $20 / 2000 cents**), split
   `payment_method_id`** (a top-level field, sibling of `screening`).
 
 The Partner API **cannot add cards.** To get a `payment_method_id`, save a card in the **Burnt dashboard**
-first (Settings → Billing), then paste its id into the `payment_method_id` field. There is no unit-update
-endpoint, so the card must be attached **at unit-create time** for a later landlord-paid rule set to work.
+first (Settings → Payments), then paste its id into the `payment_method_id` field. The API only sets a unit's
+card at create-time (no unit-update endpoint), but you can **add or change a unit's card later in the
+dashboard** (unit → Unit rules set → Payment method → Save) — no need to create a new unit.
 
 > **Scenario — you collect payment in your own app.** If you charge your applicants in your own checkout
 > (your own merchant-of-record) and just want Burnt's fee covered, use `fee_payer: operator` with your
