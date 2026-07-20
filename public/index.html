@@ -532,13 +532,13 @@
         const rows = items
           .map((w) => {
             const mark = /verified/.test(w.outcome) ? '✓' : /rejected|not set|not verified/.test(w.outcome) ? '✕' : '·';
-            return `<tr><td>${esc(new Date(w.received_at).toLocaleTimeString())}</td><td>${esc(w.event_type ?? '—')}</td><td>${mark} ${esc(w.outcome)}</td><td><code>${esc(w.delivery_id ?? '—')}</code></td></tr>`;
+            return `<tr><td>${esc(new Date(w.received_at).toLocaleString())}</td><td>${esc(w.event_type ?? '—')}</td><td>${mark} ${esc(w.outcome)}</td><td><code>${esc(w.delivery_id ?? '—')}</code></td></tr>`;
           })
           .join('');
         const summary =
           `<div class="fieldhint">secret configured: ${json?.webhookSecretConfigured ? 'yes' : 'no'} · ${items.length} received</div>` +
           (items.length
-            ? `<table><thead><tr><th>time</th><th>event</th><th>outcome</th><th>delivery</th></tr></thead><tbody>${rows}</tbody></table>`
+            ? `<table><thead><tr><th>received</th><th>event</th><th>outcome</th><th>delivery</th></tr></thead><tbody>${rows}</tbody></table>`
             : '<div class="fieldhint muted">none yet — set the tunnel + dashboard URL + secret, then click “Send test” in the dashboard.</div>');
         render($('hooksResult'), status, json, summary);
       }
