@@ -388,10 +388,6 @@ The Partner API can't change a unit's card, but the **dashboard can** — open t
 Payment method**, pick a different saved card, and **Save payment method** (add cards under **Settings →
 Payments**). No need to create a new unit.
 
-> **Reconciliation is on your side.** There is no API today to reconcile what you charged your applicant
-> against Burnt's fee — you charge your user in your app; Burnt charges you its per-screening fee. Deeper
-> partner-controlled payment / merchant-of-record settlement is on the roadmap.
-
 ## Webhooks
 
 Configure a webhook URL + signing secret per organization (dashboard/operator API). Burnt POSTs these
