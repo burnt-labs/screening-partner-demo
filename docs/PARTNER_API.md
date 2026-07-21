@@ -398,8 +398,6 @@ events so you don't have to poll:
 | Event                         | Fires when                                                        |
 | ----------------------------- | ----------------------------------------------------------------- |
 | `screening.check.completed`   | A single check finished — `check` is one of `identity`, `credit`, `evictions`, `background`, `income`, `employment`. A real-time progress signal, fired mid-flow as each step completes (before submit) |
-| `verification.completed`      | An individual verification check completes (carries the verified data)             |
-| `verification.failed`         | A verification check fails                                        |
 | `application.review_required` | An applicant's check was routed to manual review (completion is delayed, not broken) |
 | `application.completed`       | One applicant's screening reached a terminal result (all their checks + reviews done) |
 | `application_group.completed` | Every applicant screening in a group has reached a terminal state |
@@ -409,7 +407,7 @@ New event types may be added over time — **ignore any `event` you don't recogn
 
 **Correlating events to your applicant.** Every event payload carries the handles you got back when you created the screening, so you can map an event to your record without parsing the `apply_url`: `application_id` (the rental application), `group_id` (the household), and `external_id` (the id you passed on create). On group events these appear per applicant in the `applicants[]` array. All three are `null` for non-partner / reusable links.
 
-**Progress vs. result.** `screening.check.completed` is a lightweight, PII-free **progress** signal fired the instant each check finishes, mid-flow. The actual verified data still arrives only in `verification.completed` and the terminal `application.completed` / `application_group.completed`, which are released when the applicant **submits** — so a check finishing early does not leak its result.
+**Progress vs. result.** `screening.check.completed` is a lightweight, PII-free **progress** signal fired the instant each check finishes, mid-flow. It does not carry the verified result — read the verified data from `GET /application-groups/{id}` (per-applicant income, decision, and status), which is also rolled into the terminal `application.completed` / `application_group.completed`, released when the applicant **submits**. So a check finishing early does not leak its result.
 
 **Signature verification.** Every delivery carries three headers:
 
@@ -497,5 +495,5 @@ event back to the unit whose application link you provisioned.
    the Burnt login (see [the household section](#co-applicants-co-signers--guarantors-the-household));
    all of them roll into the same `application_group_id`.
 4. You receive `application_group.completed` at your webhook once **every** member of the household has
-   reached a terminal state (plus per-check `verification.*` events along the way).
+   reached a terminal state (plus per-check `screening.check.completed` events along the way).
 5. Your backend calls `GET /api/v1/application-groups/{id}` for the final status + decision.
