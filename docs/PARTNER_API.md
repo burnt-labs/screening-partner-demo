@@ -328,9 +328,13 @@ data** — no applicant names, income figures, provider claims, or report payloa
 }
 ```
 
-`status` is one of `pending | partial | error | pass | fail | archived`. `decision` is `null` until
-the operator decides, then `decision.decision` is `"accepted"` or `"rejected"`. `verification_status`
-is one of `pending | in_progress | completed | failed | expired` (or `null`).
+`status` is one of `pending | partial | error | pass | fail | completed | archived`. `completed`
+means the screening finished but the rule set has no automated income verdict (a credit / eviction /
+background-only package, with no income/employment check), so there is no `pass`/`fail` — the operator
+makes a manual accept/reject decision instead (surfaced in `decision`, and via the
+`application_group.decided` event). `decision` is `null` until the operator decides, then
+`decision.decision` is `"accepted"` or `"rejected"`. `verification_status` is one of
+`pending | in_progress | completed | failed | expired` (or `null`).
 
 The `applicants` array has **one entry per household member** — the primary plus every co-applicant /
 co-signer / guarantor — so its length is the household size, and each entry carries that person's own
