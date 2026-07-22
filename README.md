@@ -99,9 +99,9 @@ dashboard** (unit → Unit rules set → Payment method → Save) — no need to
 `server.js` includes a `POST /webhooks/burnt` receiver that verifies Burnt's signature
 (`X-Burnt-Signature: sha256=<hex>` over `` `${timestamp}.${deliveryId}.${rawBody}` `` with
 `BURNT_WEBHOOK_SECRET`, 5-min freshness window, constant-time compare, delivery-id dedupe) and logs
-every event Burnt sends — `verification.*`, per-applicant `application.*`, and household
-`application_group.*` (full list in [`docs/PARTNER_API.md`](docs/PARTNER_API.md#webhooks)). Received events
-are also visible in the "Webhooks received" panel.
+every event Burnt sends — per-check `screening.check.completed`, per-applicant `application.*`, and
+household `application_group.*` (full list in [`docs/PARTNER_API.md`](docs/PARTNER_API.md#webhooks)).
+Received events are also visible in the "Webhooks received" panel.
 
 **Locally, expect this to stay empty**, because:
 
@@ -135,8 +135,8 @@ Then:
    → update `.env` again.
 3. **Click “Send test”** in the dashboard → it should report `Test delivered (HTTP 200)`, and a `webhook.test`
    row appears (`✓ verified`) in the harness "Webhooks received" panel (hit **Refresh**).
-4. **Run a real screening** (sections ①–③). `verification.completed` arrives immediately;
-   `application_group.completed` within ~1 min (staging cron). Watch them land in the panel.
+4. **Run a real screening** (sections ①–③). `screening.check.completed` events arrive as each step
+   finishes; `application_group.completed` within ~1 min (staging cron). Watch them land in the panel.
 
 Debugging via the panel's **outcome** column: `✕ rejected: signature mismatch` → the `.env` secret ≠ the
 dashboard secret (re-copy or rotate, then restart); `received (… not set …)` → `BURNT_WEBHOOK_SECRET` is
