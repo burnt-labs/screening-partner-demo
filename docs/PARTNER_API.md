@@ -411,7 +411,43 @@ New event types may be added over time — **ignore any `event` you don't recogn
 
 **Correlating events to your applicant.** Every event payload carries the handles you got back when you created the screening, so you can map an event to your record without parsing the `apply_url`: `application_id` (the rental application), `group_id` (the household), and `external_id` (the id you passed on create). On group events these appear per applicant in the `applicants[]` array. All three are `null` for non-partner / reusable links.
 
-**Progress vs. result.** `screening.check.completed` is a lightweight, PII-free **progress** signal fired the instant each check finishes, mid-flow. It does not carry the verified result — read the verified data from `GET /application-groups/{id}` (per-applicant income, decision, and status), which is also rolled into the terminal `application.completed` / `application_group.completed`, released when the applicant **submits**. So a check finishing early does not leak its result.
+**Progress vs. result.** `screening.check.completed` is a lightweight, PII-free **progress** signal fired the instant each check finishes, mid-flow. It does not carry the verified result, so a check finishing early does not leak its result. The terminal result is split by where you read it: the **decision, status, and per-applicant income** live on `GET /application-groups/{id}` (released when the applicant **submits**); the **raw screening values** (credit score + record counts + the report link) are delivered on the `application.completed` webhook — see below — and are **not** on that pull endpoint.
+
+### The `application.completed` payload
+
+`application.completed` is the terminal per-applicant event and the **only** place the raw screening values are delivered. (The pull API deliberately returns status/decision, not the underlying report data.)
+
+```jsonc
+{
+  "event": "application.completed",
+  "link_id": "lnk_44p2avdsl0rp",
+  "group_id": "grp_414mbv8ru0dk",
+  "application_id": "rapp_wtureasdugbz",
+  "external_id": "partner-doors-003", // the id you passed on create
+  "status": "completed", // "completed" | "failed"
+  "verification_id": "ver_…", // correlation id (a chk_… id when the screening has no income/employment check)
+  "credit_score": 723, // VantageScore 4.0 int, or null (no score on file / security freeze / no report)
+  "criminal_record_count": 0, // int; 0 = ran clean, null = section unknown (security freeze / no report)
+  "housing_court_record_count": 0, // int; EVICTIONS only (see note), 0 = ran clean, null = unknown
+  "report_completed_at": "2026-07-23T21:58:51.800Z",
+  "report_url": "https://app.screening.burnt.com/report/lnk_44p2avdsl0rp#token=…", // no-login report page; null if no report
+  "report_expires_at": "2026-08-22T00:00:00.000Z", // when report_url stops working; null if no report
+  "created_at": "2026-07-23T22:11:21.423Z"
+}
+```
+
+- **`null` vs `0` matters.** For `criminal_record_count` and `housing_court_record_count`, `null` means the section is **unknown** — it didn't run, or came back a security freeze — while `0` means it **ran and was clean**. Do not collapse them. Likewise `credit_score` is `null` when there is no score on file.
+- **`housing_court_record_count` = evictions only.** The Experian data Burnt receives contains criminal and eviction records but no separate civil-filings section, so this count reflects **eviction records only**.
+- **`report_url` / `report_expires_at`.** `report_url` is a tokenized, no-login page that renders the report summary; it stops working at `report_expires_at`, which mirrors Experian's own report-validity horizon (roughly 30 days from when the report was pulled). Both are `null` for an applicant with no credit/eviction/background report (e.g. income-only).
+
+### Delivery & retries
+
+**Respond `2xx` to acknowledge.** Any non-`2xx` response — or a timeout / connection error — is counted as a failed attempt, and the delivery is **retried**. Verify the signature, durably record the event, and return `200` quickly; do the real processing asynchronously so a slow handler can't trigger a retry. (The demo's `handleWebhook` in `server.js` follows this pattern.)
+
+- **Retry policy:** up to **5 attempts** with growing backoff — **1 min → 5 min → 30 min → 2 hours → 12 hours**. A cron backstop re-drives due deliveries about once a minute, so a retry can arrive a little later than the nominal delay.
+- **Lifecycle:** each delivery is `pending` (queued or awaiting its next retry) → `delivered` (received a `2xx`) or `failed` (all 5 attempts exhausted). The operator dashboard (**Settings → Developers → Webhooks → Recent deliveries**) shows the status, the last HTTP code returned by your endpoint, and the attempt count.
+- **A `pending` row with a `5xx` (e.g. `503`)** means _your_ endpoint — or a tunnel like ngrok in front of it — returned that status or was unreachable for that attempt. Burnt keeps retrying; it is not a Burnt-side failure, and it resolves on its own once your endpoint answers `2xx`.
+- Because deliveries are retried, **the same event can arrive more than once** — deduplicate on `X-Burnt-Delivery-Id` (see Idempotency below).
 
 **Signature verification.** Every delivery carries three headers:
 
