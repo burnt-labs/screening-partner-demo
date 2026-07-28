@@ -360,7 +360,7 @@
       const str = (v) => { const t = (v ?? '').trim(); return t === '' ? undefined : t; };
       const dollars = (cents) => (Number.isFinite(cents) ? '$' + (cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—');
       const prune = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
-      const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+      const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
       // Call the local proxy. Returns { status, json, networkError? }.
       async function api(method, url, body) {

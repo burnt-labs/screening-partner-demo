@@ -10,10 +10,8 @@ managed **lister** and mint its no-login Experian enrollment link, provision a u
 - **`public/index.html`** — a single vanilla-JS page (an optional "Managed listers" pre-step **A** + the
   three core sections, each with raw-JSON viewers).
 - **[`docs/PARTNER_API.md`](docs/PARTNER_API.md)** — the full Partner API reference (endpoints,
-  request/response shapes, webhook signatures, error codes) that this harness exercises.
-- **[`docs/PARTNER_INTEGRATION_MODELS.md`](docs/PARTNER_INTEGRATION_MODELS.md)** — the integration
-  models (headless API, no-login applicant flow, per-lister aggregator support) and the resolved design
-  questions.
+  request/response shapes, webhook signatures, error codes) that this harness exercises, including the
+  **Managed listers** (aggregator) endpoints.
 
 > **This is a demo to *learn* the flow by hand — not a drop-in integration.** Before building against
 > the API in your own app or website, read [**Going to production**](#going-to-production) below.

@@ -1,13 +1,13 @@
-# Burnt Verify — Partner API (Model A)
+# Screening by Burnt — Partner API
 
-The Partner API lets your backend drive Burnt Verify screenings headlessly: provision units, start a
+The Partner API lets your backend drive Screening by Burnt screenings headlessly: provision units, start a
 screening for a specific applicant, hand out the application link, and read results — authenticated
 with a company-scoped API key instead of an interactive login.
 
 > Scope (v1): a partner can **provision units + screening rule sets, start a no-login screening for a
 > specific applicant, hand out the application link, and read results**. Partner-controlled payment /
-> merchant-of-record is PRO-528; and the underlying consumer-report data is not exposed over the API
-> (PRO-535).
+> merchant-of-record and API access to the underlying consumer-report data are on the roadmap (the
+> report data is not exposed over the API today).
 
 ## Authentication
 
@@ -30,12 +30,12 @@ dashboard API; those routes return `403 { "code": "API_KEY_SCOPE" }` for a key.
 ## Base URL & versioning
 
 All partner endpoints live under `/api/v1` on your Burnt host, e.g.
-`https://app.burntverify.com/api/v1/...`. Use the demo environment for integration testing before
+`https://app.screening.burnt.com/api/v1/...`. Use the demo environment for integration testing before
 going live.
 
 ## Managed listers (aggregators)
 
-If you screen on behalf of **many landlords** (you're an aggregator or marketplace, not a single
+If you screen on behalf of **many** landlords (you're an aggregator or marketplace, not a single
 property manager), each landlord must be the party of record for their own applicants' Experian
 reports — an FCRA requirement. Burnt models each as a **managed lister**: a lightweight, login-less
 company you provision and address with your **one** API key.
@@ -121,7 +121,7 @@ transition via `GET /api/v1/listers`.
 **201**
 
 ```json
-{ "enrollment_url": "https://app.burntverify.com/enroll/comp_lister_abc#token=<token>" }
+{ "enrollment_url": "https://app.screening.burnt.com/enroll/comp_lister_abc#token=<token>" }
 ```
 
 The `#token=…` fragment authorizes that one lister's enrollment and, because it is a URL fragment, is
@@ -163,22 +163,21 @@ record for the applicants, while **you** remain the payer and the webhook recipi
 to create the unit under your own company. A `lister_id` you don't manage returns `404`. The lister
 must be `verified` before an applicant can run the Experian step.
 
-**Payment.** The package total is a flat $20. Who pays is controlled by `fee_payer` in the `screening`
+**Payment.** The screening package has a single total (**currently $20**). Who pays is controlled by `fee_payer` in the `screening`
 object:
 
 - `"fee_payer": "applicant"` (default) — the applicant pays `applicant_pays_cents` in Burnt's flow and
-  the landlord covers the remainder. If the landlord owes anything (`applicant_pays_cents` < $20),
+  the landlord covers the remainder. If the landlord owes anything (`applicant_pays_cents` below the package total),
   include a `payment_method_id` for a card already saved on the company so it can be auto-charged.
 - `"fee_payer": "operator"` — **you cover the whole fee and the applicant is never charged.** The
   applicant payment step is hidden; the company's card on file (`payment_method_id`) is charged the
-  full $20 **up front**, before the applicant runs the screening / identity / income steps. Requires a
+  full package total **up front**, before the applicant runs the screening / identity / income steps. Requires a
   saved `payment_method_id`. Use this when you collect payment from your own applicants in your own
   checkout and settle with Burnt.
 
-(The Intellirent SDK no longer collects the applicant fee — it's collected through Burnt's Stripe rail
-now, so there is no per-package minimum and `applicant_pays_cents` can be any value ≥ 0.)
+(There is no per-package minimum — `applicant_pays_cents` can be any value ≥ 0.)
 
-To get a `payment_method_id`, save a card in the dashboard (**Settings → Billing**), then look it up with
+To get a `payment_method_id`, save a card in the dashboard (**Settings → Payments**), then look it up with
 [`GET /api/v1/payment-methods`](#list-saved-payment-methods) — the API can't add cards, only list them.
 
 **201**
@@ -194,7 +193,7 @@ To get a `payment_method_id`, save a card in the dashboard (**Settings → Billi
   },
   "application": {
     "application_link_id": "lnk_abc123",
-    "application_url": "https://app.burntverify.com/verify/lnk_abc123"
+    "application_url": "https://app.screening.burnt.com/verify/lnk_abc123"
   }
 }
 ```
@@ -217,7 +216,7 @@ GET /api/v1/payment-methods
 
 Returns the company's active saved cards so you can resolve a `payment_method_id` to attach to an
 operator-paid (or landlord-split) unit. **Read-only** — cards are added and removed in the dashboard
-(**Settings → Billing**); the API never returns raw Stripe identifiers.
+(**Settings → Payments**); the API never returns raw Stripe identifiers.
 
 **200**
 
@@ -238,8 +237,10 @@ operator-paid (or landlord-split) unit. **Read-only** — cards are added and re
 }
 ```
 
-Pass a method's `id` as the top-level `payment_method_id` when you **Create a unit** — the card is attached
-at unit-create time (there's no unit-update endpoint, and the rule-set call can't set or change it). This
+Pass a method's `id` as the top-level `payment_method_id` when you **Create a unit**. The Partner API sets a
+unit's card only at create-time (there's no unit-update endpoint), but you can **add or change a unit's card
+in the dashboard** — open the unit → **Unit rules set → Payment method → Save payment method** — so you never
+need to create a new unit just to swap the card. This
 `id` is Burnt's own payment-method id: it shares the `pm_` prefix with Stripe's PaymentMethod ids but is
 **not** a Stripe identifier — use it only as Burnt's `payment_method_id`.
 
@@ -249,10 +250,12 @@ at unit-create time (there's no unit-update endpoint, and the rule-set call can'
 POST /api/v1/units/{unitId}/rule-set
 ```
 
-Body: `{ "component_ids": [...], "applicant_pays_cents": 2000, "currency": "usd", "fee_payer": "applicant", "replace_active": false }`.
+Body: `{ "component_ids": [...], "applicant_pays_cents": 2000, "fee_payer": "applicant", "replace_active": false }`.
 `fee_payer` works exactly as in **Create a unit** above (`"operator"` = you cover the whole fee up front
-from the unit's saved card, applicant not charged). Returns the rule set plus the application link. If the unit already has an operator-configured active
-rule set, pass `replace_active: true` to overwrite it (otherwise `409 { "code": "rule_set_exists" }`).
+from the unit's saved card, applicant not charged). Currency is always USD and is set by Burnt — you do
+not send it (any `currency` you pass is ignored). Returns the rule set plus the application link. If the
+unit already has an operator-configured active rule set, pass `replace_active: true` to overwrite it
+(otherwise `409 { "code": "rule_set_exists" }`).
 
 **200** (replaced) / **201** (created)
 
@@ -266,7 +269,7 @@ rule set, pass `replace_active: true` to overwrite it (otherwise `409 { "code": 
   "monthly_rent_cents": 300000,
   "threshold_multiplier": 40,
   "application_link_id": "lnk_abc123",
-  "application_url": "https://app.burntverify.com/verify/lnk_abc123"
+  "application_url": "https://app.screening.burnt.com/verify/lnk_abc123"
 }
 ```
 
@@ -285,7 +288,7 @@ hand to (or embed for) your applicant.
 {
   "unit_id": "unit_abc123",
   "application_link_id": "lnk_abc123",
-  "application_url": "https://app.burntverify.com/verify/lnk_abc123",
+  "application_url": "https://app.screening.burnt.com/verify/lnk_abc123",
   "rule_set": {
     "status": "active",
     "component_ids": ["credit", "evictions", "income"],
@@ -330,7 +333,7 @@ key.
   "application_id": "rapp_abc123",
   "application_group_id": "grp_abc123",
   "application_link_id": "lnk_def456",
-  "apply_url": "https://app.burntverify.com/verify/lnk_def456#token=<token>&application=rapp_abc123"
+  "apply_url": "https://app.screening.burnt.com/verify/lnk_def456#token=<token>&application=rapp_abc123"
 }
 ```
 
@@ -339,12 +342,11 @@ fragment authorizes that one application; because it is a URL fragment it is nev
 server in the request line. Poll `GET /api/v1/application-groups/{application_group_id}` for status.
 
 **Re-issuing rotates the token.** Each call issues a **new** apply token for the same screening and
-**invalidates the `apply_url` from the previous call** — any link you already handed out stops working,
-while `application_id` / `application_group_id` stay the same and the newest `apply_url` resumes the
-_same_ screening exactly where the applicant left off (nothing is reset). Idempotency is scoped to the
-unit's **current active rule set**: if the operator replaces the rule set, a later call legitimately
-starts a **fresh** application with new ids. So treat this endpoint as **create-or-rotate**, not a read:
-store the `apply_url` you get back and re-call only when you deliberately want to issue a fresh link.
+**invalidates the `apply_url` from the previous call** — `application_id` / `application_group_id` stay
+the same, but any link you already handed out stops working. Opening the newest `apply_url` resumes the
+*same* screening exactly where the applicant left off; nothing is reset. So treat this endpoint as
+**create-or-rotate**, not a read: store the `apply_url` you get back and re-call only when you
+deliberately want to issue a fresh link.
 
 **404** — the unit isn't yours, or has no active rule set. **410 `{ "code": "unit_unavailable" }`** —
 the unit already has an accepted application, so no new applicant can apply.
@@ -353,9 +355,7 @@ the unit already has an accepted application, so no new applicant can apply.
 identity**: the apply token binds the screening to the applicant you named, standing in for a Burnt
 login. The applicant still gives FCRA consent inside the Burnt flow, recorded against this application
 (consent text version + timestamp + IP/UA) and linked to the identity you supplied (`external_id` /
-email, stored as `partner_external_ref`). Before enabling this in production, obtain legal sign-off
-that partner-asserted identity plus that consent record is sufficient "who-consented" evidence for
-your use.
+email, stored as `partner_external_ref`).
 
 ### Co-applicants, co-signers & guarantors (the household)
 
@@ -383,9 +383,7 @@ What this means for your integration:
   `application_group_id` you already hold (each participant appears in the `applicants` array). You
   don't need a separate handle per participant.
 - A participant without a Burnt account is asked to create one (or sign in) when they open their
-  invitation. If you need a fully login-free experience for participants too, tell us — an opt-in
-  "tokenized participant invitations" mode is on the roadmap; it would email each participant a
-  tokenized link that runs the same no-login flow.
+  invitation.
 
 ### Read application-group status & decision
 
@@ -430,9 +428,13 @@ data** — no applicant names, income figures, provider claims, or report payloa
 }
 ```
 
-`status` is one of `pending | partial | error | pass | fail | archived`. `decision` is `null` until
-the operator decides, then `decision.decision` is `"accepted"` or `"rejected"`. `verification_status` is one of `pending | in_progress | completed | failed |
-expired` (or `null`).
+`status` is one of `pending | partial | error | pass | fail | completed | archived`. `completed`
+means the screening finished but the rule set has no automated income verdict (a credit / eviction /
+background-only package, with no income/employment check), so there is no `pass`/`fail` — the operator
+makes a manual accept/reject decision instead (surfaced in `decision`, and via the
+`application_group.decided` event). `decision` is `null` until the operator decides, then
+`decision.decision` is `"accepted"` or `"rejected"`. `verification_status` is one of
+`pending | in_progress | completed | failed | expired` (or `null`).
 
 The `applicants` array has **one entry per household member** — the primary plus every co-applicant /
 co-signer / guarantor — so its length is the household size, and each entry carries that person's own
@@ -442,20 +444,110 @@ not a person id, and carries no PII.
 
 **404** — unknown group, or a group belonging to another company.
 
+## Paying for your applicants (you collect payment in your own app)
+
+Some partners charge their applicants **inside their own app** — their own checkout, their own
+merchant-of-record — and don't want Burnt to charge the applicant at all. That's `fee_payer: "operator"`:
+**you cover Burnt's per-screening fee (currently $20) from your company card on file, and the applicant never sees a
+Burnt payment step.**
+
+Burnt isn't involved in what you charge your user — that transaction happens entirely in your app. Burnt
+only charges **you** its per-screening fee; what you collect from the applicant, and how, is up to you.
+
+**1) Save a card (one-time).** The Partner API can't add cards, but it can list them. In the Burnt
+dashboard go to **Settings → Payments** and save a company card, then read its `payment_method_id` from
+[`GET /api/v1/payment-methods`](#list-saved-payment-methods). You pass that id when you
+create units.
+
+**2) Create units operator-paid.** Attach the card and set `fee_payer: "operator"` at unit-create time.
+`payment_method_id` is a **top-level** field (a sibling of `screening`, not inside it). Via the API you set
+the card at unit-create time (there's no unit-update endpoint); to add or change a unit's card afterward, use
+the dashboard (unit → **Unit rules set → Payment method**). A landlord-paid rule set reads the card off the
+unit:
+
+```json
+POST /api/v1/units
+{
+  "property_label": "123 Main St",
+  "monthly_rent_cents": 300000,
+  "address_line1": "123 Main St", "city": "Austin", "state": "TX", "postal_code": "78701", "country": "US",
+  "payment_method_id": "pm_abc123",
+  "screening": { "component_ids": ["credit", "evictions", "income"], "fee_payer": "operator" }
+}
+```
+
+In `operator` mode `applicant_pays_cents` is forced to `0` (you can omit it). Omitting the card returns
+`400 { "error": "payment_method_id is required when the landlord pays part of the package" }`. (You can
+also switch an existing unit to operator with `POST /api/v1/units/{unitId}/rule-set` + `fee_payer:
+"operator"`, as long as the unit has a saved card — add or change one in the dashboard if it doesn't.)
+
+**3) Start the screening as usual.** Nothing changes for you here — call
+`POST /api/v1/units/{unitId}/screenings` and hand the applicant the returned `apply_url`. Burnt charges
+your saved card the package total **up front, the moment the applicant begins their screening**, before any
+checks (identity / income / credit) run. The charge is **idempotent per application**, so re-issuing the
+`apply_url` for the same applicant never double-charges.
+
+**Keep a valid card on file.** If the card is missing, inactive, or the charge declines when the applicant
+begins, their screening is **blocked** until it's resolved — the applicant's paid step returns `402` with
+`OPERATOR_PAYMENT_METHOD_REQUIRED`, `OPERATOR_PAYMENT_METHOD_UNAVAILABLE`, or `OPERATOR_PAYMENT_FAILED`.
+The Partner API can't change a unit's card, but the **dashboard can** — open the unit → **Unit rules set →
+Payment method**, pick a different saved card, and **Save payment method** (add cards under **Settings →
+Payments**). No need to create a new unit.
+
 ## Webhooks
 
 Configure a webhook URL + signing secret per organization (dashboard/operator API). Burnt POSTs these
 events so you don't have to poll:
 
-| Event                         | Fires when                                                                                                            |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `verification.completed`      | An individual verification check completes                                                                            |
-| `verification.failed`         | A verification check fails                                                                                            |
-| `application.review_required` | An applicant's check was routed to manual review (completion is delayed, not broken)                                  |
-| `application_group.completed` | Every applicant screening in a group has reached a terminal state                                                     |
+| Event                         | Fires when                                                        |
+| ----------------------------- | ----------------------------------------------------------------- |
+| `screening.check.completed`   | A single check finished — `check` is one of `identity`, `credit`, `evictions`, `background`, `income`, `employment`. A real-time progress signal, fired mid-flow as each step completes (before submit) |
+| `application.review_required` | An applicant's check was routed to manual review (completion is delayed, not broken) |
+| `application.completed`       | One applicant's screening reached a terminal result (all their checks + reviews done) |
+| `application_group.completed` | Every applicant screening in a group has reached a terminal state |
 | `application_group.decided`   | An operator accepted or rejected the household — carries the same `decision` object as `GET /application-groups/{id}` |
 
 New event types may be added over time — **ignore any `event` you don't recognize** rather than erroring on it.
+
+**Correlating events to your applicant.** Every event payload carries the handles you got back when you created the screening, so you can map an event to your record without parsing the `apply_url`: `application_id` (the rental application), `group_id` (the household), and `external_id` (the id you passed on create). On group events these appear per applicant in the `applicants[]` array. All three are `null` for non-partner / reusable links.
+
+**Progress vs. result.** `screening.check.completed` is a lightweight, PII-free **progress** signal fired the instant each check finishes, mid-flow. It does not carry the verified result, so a check finishing early does not leak its result. The terminal result is split by where you read it: the **decision, status, and per-applicant income** live on `GET /application-groups/{id}` (released when the applicant **submits**); the **raw screening values** (credit score + record counts + the report link) are delivered on the `application.completed` webhook — see below — and are **not** on that pull endpoint.
+
+### The `application.completed` payload
+
+`application.completed` is the terminal per-applicant event and the **only** place the raw screening values are delivered. (The pull API deliberately returns status/decision, not the underlying report data.)
+
+```jsonc
+{
+  "event": "application.completed",
+  "link_id": "lnk_44p2avdsl0rp",
+  "group_id": "grp_414mbv8ru0dk",
+  "application_id": "rapp_wtureasdugbz",
+  "external_id": "partner-doors-003", // the id you passed on create
+  "status": "completed", // "completed" | "failed"
+  "verification_id": "ver_…", // correlation id (a chk_… id when the screening has no income/employment check)
+  "credit_score": 723, // VantageScore 4.0 int, or null (no score on file / security freeze / no report)
+  "criminal_record_count": 0, // int; 0 = ran clean, null = section unknown (security freeze / no report)
+  "housing_court_record_count": 0, // int; EVICTIONS only (see note), 0 = ran clean, null = unknown
+  "report_completed_at": "2026-07-23T21:58:51.800Z",
+  "report_url": "https://app.screening.burnt.com/report/lnk_44p2avdsl0rp#token=…", // no-login report page; null if no report
+  "report_expires_at": "2026-08-22T00:00:00.000Z", // when report_url stops working; null if no report
+  "created_at": "2026-07-23T22:11:21.423Z"
+}
+```
+
+- **`null` vs `0` matters.** For `criminal_record_count` and `housing_court_record_count`, `null` means the section is **unknown** — it didn't run, or came back a security freeze — while `0` means it **ran and was clean**. Do not collapse them. Likewise `credit_score` is `null` when there is no score on file.
+- **`housing_court_record_count` = evictions only.** The Experian data Burnt receives contains criminal and eviction records but no separate civil-filings section, so this count reflects **eviction records only**.
+- **`report_url` / `report_expires_at`.** `report_url` is a tokenized, no-login page that renders the report summary; it stops working at `report_expires_at`, which mirrors Experian's own report-validity horizon (roughly 30 days from when the report was pulled). Both are `null` for an applicant with no credit/eviction/background report (e.g. income-only).
+
+### Delivery & retries
+
+**Respond `2xx` to acknowledge.** Any non-`2xx` response — or a timeout / connection error — is counted as a failed attempt, and the delivery is **retried**. Verify the signature, durably record the event, and return `200` quickly; do the real processing asynchronously so a slow handler can't trigger a retry. (The demo's `handleWebhook` in `server.js` follows this pattern.)
+
+- **Retry policy:** up to **5 attempts** with growing backoff — **1 min → 5 min → 30 min → 2 hours → 12 hours**. A cron backstop re-drives due deliveries about once a minute, so a retry can arrive a little later than the nominal delay.
+- **Lifecycle:** each delivery is `pending` (queued or awaiting its next retry) → `delivered` (received a `2xx`) or `failed` (all 5 attempts exhausted). The operator dashboard (**Settings → Developers → Webhooks → Recent deliveries**) shows the status, the last HTTP code returned by your endpoint, and the attempt count.
+- **A `pending` row with a `5xx` (e.g. `503`)** means _your_ endpoint — or a tunnel like ngrok in front of it — returned that status or was unreachable for that attempt. Burnt keeps retrying; it is not a Burnt-side failure, and it resolves on its own once your endpoint answers `2xx`.
+- Because deliveries are retried, **the same event can arrive more than once** — deduplicate on `X-Burnt-Delivery-Id` (see Idempotency below).
 
 **Signature verification.** Every delivery carries three headers:
 
@@ -484,6 +576,33 @@ function verifyBurntWebhook(headers, rawBody, secret) {
   const b = Buffer.from(expected);
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
+```
+
+**Any language.** The signature is a standard HMAC-SHA256 over the same signed string, so you can verify it
+in whatever your backend runs. The same check in Python:
+
+```python
+import hashlib
+import hmac
+import time
+from datetime import datetime
+
+
+def verify_burnt_webhook(headers, raw_body, secret):
+    """`raw_body` = the exact request body as received (str or bytes), not a re-serialized dict."""
+    signature = headers.get("x-burnt-signature")
+    timestamp = headers.get("x-burnt-timestamp")
+    delivery_id = headers.get("x-burnt-delivery-id")
+    if not (signature and timestamp and delivery_id):
+        return False
+    # X-Burnt-Timestamp is ISO-8601 — enforce the 5-minute replay window.
+    sent = datetime.fromisoformat(timestamp.replace("Z", "+00:00")).timestamp()
+    if abs(time.time() - sent) > 5 * 60:
+        return False
+    body = raw_body.decode() if isinstance(raw_body, bytes) else raw_body
+    signed = f"{timestamp}.{delivery_id}.{body}"
+    expected = "sha256=" + hmac.new(secret.encode(), signed.encode(), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(signature, expected)
 ```
 
 **Idempotency.** Deliveries may be retried. Deduplicate on the delivery id (and/or event id) so you
@@ -527,5 +646,5 @@ themselves._
    the Burnt login (see [the household section](#co-applicants-co-signers--guarantors-the-household));
    all of them roll into the same `application_group_id`.
 4. You receive `application_group.completed` at your webhook once **every** member of the household has
-   reached a terminal state (plus per-check `verification.*` events along the way).
+   reached a terminal state (plus per-check `screening.check.completed` events along the way).
 5. Your backend calls `GET /api/v1/application-groups/{id}` for the final status + decision.
