@@ -29,6 +29,7 @@ if (!BURNT_API_KEY) {
 // survives restarts and works across instances. See README → "Going to production".
 let lastUnitId = null;
 let lastGroupId = null;
+let lastListerId = null;
 const recentWebhooks = []; // most-recent-first; capped
 const seenDeliveries = new Set(); // webhook idempotency (demo-only — see note above)
 
@@ -90,7 +91,41 @@ app.post('/webhooks/burnt', express.raw({ type: '*/*' }), handleWebhook);
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 1) Create a unit (optionally configuring screening + minting the link in one call).
+// 0) Managed listers (aggregators). If you screen for MANY landlords, provision each as a login-less
+//    "lister" and address them all with your ONE API key. Each lister completes a one-time Experian
+//    enrollment (via the tokenized no-login link below) so it becomes the party of record for its own
+//    applicants' reports — while you stay the payer + webhook recipient. Then create units with
+//    `lister_id`. Single-company partners skip this. See docs/PARTNER_API.md → "Managed listers".
+app.post(
+  '/api/create-lister',
+  proxy(async (req, res) => {
+    const { status, json } = await burntFetch('POST', '/api/v1/listers', pruneEmpty(req.body || {}));
+    if (status < 400 && json?.lister?.id) lastListerId = json.lister.id;
+    res.status(status).json(json);
+  }),
+);
+app.get(
+  '/api/listers',
+  proxy(async (_req, res) => {
+    const { status, json } = await burntFetch('GET', '/api/v1/listers');
+    res.status(status).json(json);
+  }),
+);
+// Mint the lister's tokenized no-login Experian enrollment URL (POST — no body). Surface `enrollment_url`
+// to the lister; they open it and complete enrollment with no Burnt account.
+app.post(
+  '/api/listers/:id/enrollment-session',
+  proxy(async (req, res) => {
+    const { status, json } = await burntFetch(
+      'POST',
+      `/api/v1/listers/${encodeURIComponent(req.params.id)}/enrollment-session`,
+    );
+    res.status(status).json(json);
+  }),
+);
+
+// 1) Create a unit (optionally configuring screening + minting the link in one call). Pass `lister_id`
+//    (forwarded verbatim from the body) to create the unit under a lister you manage.
 app.post(
   '/api/create-unit',
   proxy(async (req, res) => {
@@ -185,7 +220,7 @@ app.get(
 
 // Convenience: last-known ids + config for the UI to prefill (never returns the API key).
 app.get('/api/state', (_req, res) => {
-  res.json({ lastUnitId, lastGroupId, baseUrl: BURNT_BASE_URL, hasKey: Boolean(BURNT_API_KEY) });
+  res.json({ lastUnitId, lastGroupId, lastListerId, baseUrl: BURNT_BASE_URL, hasKey: Boolean(BURNT_API_KEY) });
 });
 
 // Convenience: webhooks this server has received + verified (rarely populated locally — see README).
