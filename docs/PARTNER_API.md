@@ -33,7 +33,100 @@ All partner endpoints live under `/api/v1` on your Burnt host, e.g.
 `https://app.screening.burnt.com/api/v1/...`. Use the demo environment for integration testing before
 going live.
 
+## Managed listers (aggregators)
+
+If you screen on behalf of **many** landlords (you're an aggregator or marketplace, not a single
+property manager), each landlord must be the party of record for their own applicants' Experian
+reports — an FCRA requirement. Burnt models each as a **managed lister**: a lightweight, login-less
+company you provision and address with your **one** API key.
+
+- You **provision** a lister once (`POST /api/v1/listers`), then reference it by id on the calls that
+  create resources for it.
+- Each lister completes a **one-time Experian enrollment**
+  (`POST /api/v1/listers/{listerId}/enrollment-session`) so it becomes the certified END_USER its
+  reports share to. Screening under a lister is blocked until its `enrollment_status` is `verified`.
+- Your key acts on **any lister you manage, and only those** — a lister id you don't manage returns
+  `404` (the same "never reveal another tenant" rule as every other resource).
+- **You remain the payer and the results recipient.** Operator-covered charges for a managed lister's
+  screening hit **your** card on file (not the lister's), and every webhook for it is delivered to
+  **your** endpoint with **your** signature. The lister is Experian's party of record; you are Burnt's.
+
+If you screen for a **single** company (yourself), you don't need listers — skip this section and
+create units directly under your own company.
+
 ## Endpoints
+
+### Provision a managed lister
+
+```
+POST /api/v1/listers
+```
+
+Create a login-less lister you manage (see [Managed listers](#managed-listers-aggregators)). `name` is
+required; everything else is optional. The lister is always linked to **your** company (the caller) —
+you can't provision a lister under another partner.
+
+```json
+{
+  "name": "Oakwood Property Management",
+  "external_ref": "your-stable-lister-id",
+  "owner_email": "manager@oakwood.example",
+  "operator_first_name": "Dana",
+  "operator_last_name": "Reed",
+  "operator_phone": "+15125550143"
+}
+```
+
+`external_ref` is your own id for the lister (stored and echoed back on reads); the operator contact
+fields prefill the lister's Experian enrollment.
+
+**201**
+
+```json
+{
+  "lister": {
+    "id": "comp_lister_abc",
+    "name": "Oakwood Property Management",
+    "external_ref": "your-stable-lister-id",
+    "enrollment_status": "not_started",
+    "created_at": "2026-07-28T00:00:00.000Z"
+  }
+}
+```
+
+Use `lister.id` as the `lister_id` on **Create a unit**. `enrollment_status` is one of
+`not_started | processing | verified | failed`. The response never includes the lister's Experian key
+or WorkOS org.
+
+### List managed listers
+
+```
+GET /api/v1/listers   → { "data": [ { lister }, … ] }
+```
+
+Every lister you manage, each with its current `enrollment_status`. Never returns a lister's Experian
+key or PII.
+
+### Mint a lister enrollment link
+
+```
+POST /api/v1/listers/{listerId}/enrollment-session
+```
+
+Returns a **tokenized, no-login URL** you surface to the lister in your app. The lister opens it and
+completes their one-time Experian END_USER enrollment (identity verification / KBA) with **no Burnt
+account**. On success the lister becomes `verified` and can be screened under; you can watch that
+transition via `GET /api/v1/listers`.
+
+**201**
+
+```json
+{ "enrollment_url": "https://app.screening.burnt.com/enroll/comp_lister_abc#token=<token>" }
+```
+
+The `#token=…` fragment authorizes that one lister's enrollment and, because it is a URL fragment, is
+never sent to the Burnt server in the request line. The link is **single-use on success** and expires
+after 30 days — re-call to mint a fresh one. **404** if the lister isn't one you manage.
 
 ### Create a unit
 
@@ -62,6 +155,13 @@ POST /api/v1/units
 Provide the structured address fields (`address_line1`, `city`, `state`, `postal_code`, `country`) —
 the duplicate-address guard keys off them, so `city`/`state`/`postal_code` alone can false-positive
 against other units in the same zip.
+
+**Screening on behalf of a lister.** If you manage listers (see
+[Managed listers](#managed-listers-aggregators)), pass `"lister_id": "comp_lister_abc"` to create the
+unit — and every screening under it — **owned by that lister**. The lister becomes Experian's party of
+record for the applicants, while **you** remain the payer and the webhook recipient. Omit `lister_id`
+to create the unit under your own company. A `lister_id` you don't manage returns `404`. The lister
+must be `verified` before an applicant can run the Experian step.
 
 **Payment.** The screening package has a single total (**currently $20**). Who pays is controlled by `fee_payer` in the `screening`
 object:
@@ -511,6 +611,11 @@ process each event once.
 **Correlation.** Payloads carry `unit_id`, `application_group_id`, and `link_id` — use these to tie an
 event back to the unit whose application link you provisioned.
 
+**Managed listers.** Events for a managed lister's screening are delivered to **your** (the managing
+partner's) URL + signing secret — a lister has no webhook of its own. Use the payload's `unit_id` /
+`application_group_id` / `link_id` to attribute the event to the lister whose unit you created (map it
+back via the `lister_id` you passed on **Create a unit**).
+
 ## Errors
 
 | Status                            | Meaning                                                  |
@@ -522,8 +627,14 @@ event back to the unit whose application link you provisioned.
 
 ## Typical integration flow
 
+_Aggregators first: `POST /api/v1/listers` to provision each landlord, surface the
+`enrollment-session` link so they complete Experian enrollment (`enrollment_status: verified`), then
+create units with that `lister_id`. Single-company partners skip this and create units under
+themselves._
+
 1. Your backend creates the unit + screening in one call (`POST /api/v1/units` with a `screening`
-   package) — or the operator configures it in the dashboard.
+   package — plus `lister_id` if screening for a managed lister) — or the operator configures it in
+   the dashboard.
 2. Get the applicant into the flow, one of two ways:
    - **No-login (recommended when your users are already signed in):** `POST
 /api/v1/units/{unitId}/screenings` with the applicant's email → deliver the returned `apply_url`.

@@ -70,6 +70,7 @@
         display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 6px;
         background: var(--accent); color: var(--accent-ink); font-size: 12px; font-weight: 700; flex: none;
       }
+      section.card > h2 .n.opt { background: var(--muted); }
       section.card > .hint { color: var(--muted); font-size: 12.5px; margin: 0 0 14px 30px; }
       .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 14px; }
       .grid .full { grid-column: 1 / -1; }
@@ -149,6 +150,45 @@
         path most integrations use in production).
       </div>
 
+      <!-- A ─ Managed listers (aggregators, optional) ─────────────────────── -->
+      <section class="card" id="listerCard">
+        <h2><span class="n opt">A</span> Managed listers <span class="opt">· aggregators only, optional</span></h2>
+        <p class="hint">Screening for <strong>many</strong> landlords? Provision each as a login-less <strong>lister</strong> (<code>POST /api/v1/listers</code>), have them complete a one-time Experian enrollment via a tokenized no-login link, then create units with that <code>lister_id</code>. Each lister is the party of record for its applicants' reports; <strong>you</strong> stay the payer &amp; webhook recipient. Screening for a single company (yourself)? <strong>Skip this</strong> and start at step 1.</p>
+        <form id="listerForm">
+          <div class="grid">
+            <div class="full">
+              <label>name</label>
+              <input type="text" id="lister_name" value="Oakwood Property Management" required />
+            </div>
+            <div>
+              <label>external_ref <span class="opt">(optional — your id for the lister)</span></label>
+              <input type="text" id="lister_external_ref" value="lister-001" />
+            </div>
+            <div>
+              <label>owner_email <span class="opt">(optional)</span></label>
+              <input type="email" id="lister_owner_email" value="manager@oakwood.example" />
+            </div>
+            <div>
+              <label>operator_first_name <span class="opt">(optional)</span></label>
+              <input type="text" id="lister_first" value="Dana" />
+            </div>
+            <div>
+              <label>operator_last_name <span class="opt">(optional)</span></label>
+              <input type="text" id="lister_last" value="Reed" />
+            </div>
+            <div class="full">
+              <label>operator_phone <span class="opt">(optional — prefills the enrollment)</span></label>
+              <input type="text" id="lister_phone" value="+15125550143" />
+            </div>
+          </div>
+          <div class="row-actions">
+            <button type="submit">Provision lister</button>
+            <button type="button" class="secondary" id="listerReload">↻ List my listers</button>
+          </div>
+        </form>
+        <div class="result" id="listerResult"></div>
+      </section>
+
       <!-- 1 ─ Create unit + screening ─────────────────────────────────────── -->
       <section class="card">
         <h2><span class="n">1</span> Create unit + screening</h2>
@@ -158,6 +198,11 @@
             <div class="full">
               <label>property_label</label>
               <input type="text" id="property_label" value="123 Main St" required />
+            </div>
+            <div class="full">
+              <label>lister_id <span class="opt">(optional — aggregators; from section A)</span></label>
+              <input type="text" id="unit_lister_id" placeholder="comp_… (blank = your own company)" />
+              <div class="fieldhint">Set this to create the unit — and its screenings — under a lister you manage (auto-filled when you provision/select one in section A). The lister must be enrolled (<code>verified</code>) before its applicants can run the Experian step.</div>
             </div>
             <div>
               <label>unit_label <span class="opt">(optional)</span></label>
@@ -315,7 +360,7 @@
       const str = (v) => { const t = (v ?? '').trim(); return t === '' ? undefined : t; };
       const dollars = (cents) => (Number.isFinite(cents) ? '$' + (cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—');
       const prune = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
-      const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+      const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
       // Call the local proxy. Returns { status, json, networkError? }.
       async function api(method, url, body) {
@@ -404,11 +449,105 @@
         $('payment_method_id').value = v; // '' for none, else the card id
       });
 
+      // ── A. Managed listers (aggregators) ──
+      function listerRowActions(id) {
+        return (
+          `<div class="row-actions">` +
+          `<button type="button" class="secondary" data-enroll="${esc(id)}">Get enrollment link</button>` +
+          `<button type="button" class="secondary" data-useunit="${esc(id)}">Use for the unit below ↓</button>` +
+          `</div><div class="result" data-enrollout="${esc(id)}"></div>`
+        );
+      }
+
+      $('listerForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const body = prune({
+          name: str($('lister_name').value),
+          external_ref: str($('lister_external_ref').value),
+          owner_email: str($('lister_owner_email').value),
+          operator_first_name: str($('lister_first').value),
+          operator_last_name: str($('lister_last').value),
+          operator_phone: str($('lister_phone').value),
+        });
+        $('listerResult').innerHTML = '<span class="muted">Provisioning…</span>';
+        const { status, json } = await api('POST', '/api/create-lister', body);
+        let summary = '';
+        if (status < 400 && json?.lister) {
+          const l = json.lister;
+          $('unit_lister_id').value = l.id; // pre-fill the create-unit lister_id
+          const enrolled = l.enrollment_status === 'verified';
+          summary =
+            `<dl class="kv"><dt>lister id</dt><dd><code>${esc(l.id)}</code></dd>` +
+            `<dt>enrollment_status</dt><dd><strong>${esc(l.enrollment_status)}</strong></dd></dl>` +
+            `<div class="note ${enrolled ? 'ok' : 'warn'}">${enrolled ? 'Already enrolled — you can screen under this lister now.' : 'Not enrolled yet. Get the enrollment link below and have the lister complete it before screening under this lister.'}</div>` +
+            listerRowActions(l.id) +
+            `<div class="fieldhint">The create-unit form (section 1) is pre-filled with this <code>lister_id</code>.</div>`;
+        }
+        render($('listerResult'), status, json, summary);
+      });
+
+      async function loadListers() {
+        $('listerReload').disabled = true;
+        const { status, json } = await api('GET', '/api/listers');
+        $('listerReload').disabled = false;
+        let summary = '';
+        if (status < 400 && Array.isArray(json?.data)) {
+          const rows = json.data
+            .map(
+              (l) =>
+                `<tr><td><code>${esc(l.id)}</code></td><td>${esc(l.name ?? '—')}</td><td>${esc(l.external_ref ?? '—')}</td><td>${esc(l.enrollment_status)}</td>` +
+                `<td style="white-space:nowrap"><button type="button" class="secondary" data-enroll="${esc(l.id)}">enroll link</button> <button type="button" class="secondary" data-useunit="${esc(l.id)}">use ↓</button></td></tr>` +
+                `<tr><td colspan="5"><div class="result" data-enrollout="${esc(l.id)}"></div></td></tr>`,
+            )
+            .join('');
+          summary =
+            `<table><thead><tr><th>id</th><th>name</th><th>external_ref</th><th>enrollment</th><th></th></tr></thead>` +
+            `<tbody>${rows || '<tr><td colspan="5" class="muted">no listers yet — provision one above</td></tr>'}</tbody></table>`;
+        }
+        render($('listerResult'), status, json, summary);
+      }
+      $('listerReload').addEventListener('click', loadListers);
+
+      async function mintEnrollLink(id, outEl) {
+        outEl.innerHTML = '<span class="muted">Minting link…</span>';
+        const { status, json } = await api('POST', '/api/listers/' + encodeURIComponent(id) + '/enrollment-session');
+        if (status < 400 && json?.enrollment_url) {
+          const a = document.createElement('a');
+          a.href = json.enrollment_url;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.textContent = json.enrollment_url;
+          outEl.innerHTML =
+            `<div class="note ok"><strong>Enrollment link</strong> — send this to the lister; they open it (no Burnt account) and complete Experian enrollment. Single-use on success · 30-day expiry.</div>` +
+            `<div class="summary"></div>`;
+          outEl.querySelector('.summary').appendChild(a);
+        } else {
+          render(outEl, status, json, '');
+        }
+      }
+
+      // Delegated clicks for the per-lister "enrollment link" / "use for unit" buttons (section A results).
+      $('listerResult').addEventListener('click', (e) => {
+        const enroll = e.target.closest('[data-enroll]');
+        if (enroll) {
+          const id = enroll.getAttribute('data-enroll');
+          const out = $('listerResult').querySelector(`[data-enrollout="${CSS.escape(id)}"]`);
+          if (out) mintEnrollLink(id, out);
+          return;
+        }
+        const use = e.target.closest('[data-useunit]');
+        if (use) {
+          $('unit_lister_id').value = use.getAttribute('data-useunit');
+          $('unit_lister_id').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      });
+
       // ── 1. Create unit ──
       $('unitForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const components = [...document.querySelectorAll('#components input:checked')].map((c) => c.value);
         const body = prune({
+          lister_id: str($('unit_lister_id').value),
           property_label: str($('property_label').value),
           unit_label: str($('unit_label').value),
           monthly_rent_cents: num($('monthly_rent_cents').value),
@@ -554,6 +693,7 @@
         }
         if (json?.lastUnitId) $('screen_unit_id').value = json.lastUnitId;
         if (json?.lastGroupId) $('group_id').value = json.lastGroupId;
+        if (json?.lastListerId) $('unit_lister_id').value = json.lastListerId;
       })();
     </script>
   </body>

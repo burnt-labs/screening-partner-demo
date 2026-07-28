@@ -1,14 +1,17 @@
 # Screening by Burnt — Partner API demo
 
-A tiny local app to walk the **Screening by Burnt** Partner API end to end: provision a unit +
-screening, start a **no-login** screening for an applicant, get a tokenized apply URL, then poll the
-household (application-group) status and decision.
+A tiny local app to walk the **Screening by Burnt** Partner API end to end: (optionally) provision a
+managed **lister** and mint its no-login Experian enrollment link, provision a unit + screening, start a
+**no-login** screening for an applicant, get a tokenized apply URL, then poll the household
+(application-group) status and decision.
 
 - **`server.js`** — an Express **proxy**. The browser talks only to this server; this server holds the
   `bvk_` API key and makes the real Burnt calls with it.
-- **`public/index.html`** — a single vanilla-JS page (three sections + raw-JSON viewers).
+- **`public/index.html`** — a single vanilla-JS page (an optional "Managed listers" pre-step **A** + the
+  three core sections, each with raw-JSON viewers).
 - **[`docs/PARTNER_API.md`](docs/PARTNER_API.md)** — the full Partner API reference (endpoints,
-  request/response shapes, webhook signatures, error codes) that this harness exercises.
+  request/response shapes, webhook signatures, error codes) that this harness exercises, including the
+  **Managed listers** (aggregator) endpoints.
 
 > **This is a demo to *learn* the flow by hand — not a drop-in integration.** Before building against
 > the API in your own app or website, read [**Going to production**](#going-to-production) below.
@@ -64,6 +67,10 @@ curl -s "$BURNT_BASE_URL/api/v1/units" -H "Authorization: Bearer $BURNT_API_KEY"
 
 ## The flow
 
+_Aggregators (optional): in section **A**, provision a managed **lister**, click **Get enrollment link** and
+have that landlord complete Experian enrollment, then create the unit with its `lister_id` (auto-filled).
+Single-company partners skip section A and start at step 1._
+
 1. **Create unit + screening** (section 1) → note the `unit_…` id and `application_url`.
 2. **Start no-login screening** (section 2) → returns an `apply_url` with a `#token=…` fragment. The unit
    id is prefilled from step 1.
@@ -73,6 +80,24 @@ curl -s "$BURNT_BASE_URL/api/v1/units" -H "Authorization: Bearer $BURNT_API_KEY"
    reaches a terminal value (`pass` / `fail`) and `decision` populates.
 
 Every call shows the raw JSON response in a collapsible block, and errors surface the status code + body.
+
+## Managed listers (aggregators — section A, optional)
+
+If you screen on behalf of **many** landlords, each landlord must be the party of record for its own
+applicants' Experian reports (FCRA). Burnt models each as a **managed lister** — a login-less company you
+provision and address with your **one** API key:
+
+1. **Provision a lister** (`POST /api/v1/listers`) → you get a `comp_…` id and `enrollment_status: not_started`.
+2. **Get its enrollment link** (`POST /api/v1/listers/{id}/enrollment-session`) → a tokenized no-login URL.
+   Send it to the landlord; they open it (no Burnt account) and complete their one-time Experian END_USER
+   enrollment. `enrollment_status` becomes `verified` (check via **List my listers**).
+3. **Create units with that `lister_id`** (section 1 pre-fills it) → the unit and its screenings are owned
+   by the lister; its reports share to the lister's own Experian account.
+
+You stay the **payer** (operator-covered charges hit your card) and the **webhook recipient** (every event
+for a lister's screening is delivered to your endpoint with your signature). Your key acts only on listers
+you manage — anyone else's id returns `404`. Full detail →
+[`docs/PARTNER_API.md`](docs/PARTNER_API.md#managed-listers-aggregators).
 
 ## Fee modes (section 1)
 
@@ -147,6 +172,9 @@ send-side error (tunnel down / wrong URL).
 
 | This server | → Burnt |
 | --- | --- |
+| `POST /api/create-lister` | `POST /listers` |
+| `GET /api/listers` | `GET /listers` |
+| `POST /api/listers/:id/enrollment-session` | `POST /listers/:id/enrollment-session` |
 | `POST /api/create-unit` | `POST /units` |
 | `GET /api/units`, `GET /api/units/:id` | `GET /units`, `GET /units/:id` |
 | `POST /api/units/:id/rule-set` | `POST /units/:id/rule-set` |
