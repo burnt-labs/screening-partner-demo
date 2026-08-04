@@ -94,6 +94,11 @@ provision and address with your **one** API key:
 3. **Create units with that `lister_id`** (section 1 pre-fills it) → the unit and its screenings are owned
    by the lister; its reports share to the lister's own Experian account.
 
+> **Prefill the enrollment form (optional, SCR-479):** pass a `prefill` object in the enrollment-session
+> call (recommended — stored with the token, no PII in the URL), or append allowlisted fields to the link's
+> `#hash`. Section **A** has a collapsible **Enrollment prefill** panel with a body/URL channel toggle.
+> Personal identity only (no SSN/DOB; company name isn't an Experian field).
+
 You stay the **payer** (operator-covered charges hit your card) and the **webhook recipient** (every event
 for a lister's screening is delivered to your endpoint with your signature). Your key acts only on listers
 you manage — anyone else's id returns `404`. Full detail →

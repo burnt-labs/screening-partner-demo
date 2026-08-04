@@ -186,6 +186,30 @@
             <button type="button" class="secondary" id="listerReload">↻ List my listers</button>
           </div>
         </form>
+
+        <!-- Enrollment prefill (SCR-479): optionally pre-populate the lister's Experian enrollment form. -->
+        <details id="enrollPrefill" style="margin-top: 6px">
+          <summary style="cursor: pointer; font-weight: 600">Enrollment prefill <span class="opt">· optional (SCR-479)</span></summary>
+          <p class="hint">Pre-populate the lister's Experian enrollment form so they review instead of re-key. Personal identity only — <strong>no SSN/DOB</strong>, and company name isn't an Experian field. Applied when you click <strong>Get enrollment link</strong> below.</p>
+          <div class="grid">
+            <div><label>firstName</label><input type="text" id="pf_firstName" value="Dana" /></div>
+            <div><label>lastName</label><input type="text" id="pf_lastName" value="Reed" /></div>
+            <div><label>email</label><input type="email" id="pf_email" value="dana.reed@oakwood.example" /></div>
+            <div><label>phone</label><input type="text" id="pf_phone" value="(512) 555-0143" /></div>
+            <div class="full"><label>currentStreet</label><input type="text" id="pf_currentStreet" value="123 Congress Ave" /></div>
+            <div><label>currentCity</label><input type="text" id="pf_currentCity" value="Austin" /></div>
+            <div><label>currentState</label><input type="text" id="pf_currentState" value="TX" /></div>
+            <div><label>currentZip</label><input type="text" id="pf_currentZip" value="78701" /></div>
+            <div class="full">
+              <label>channel</label>
+              <select id="pf_channel">
+                <option value="body">API body (B) — recommended · stored with the token, no PII in the URL</option>
+                <option value="url">URL params (A) — appended to the link #hash</option>
+              </select>
+            </div>
+          </div>
+        </details>
+
         <div class="result" id="listerResult"></div>
       </section>
 
@@ -508,17 +532,50 @@
       }
       $('listerReload').addEventListener('click', loadListers);
 
+      // Read the optional enrollment prefill (SCR-479) — allowlisted personal-identity fields only.
+      function readEnrollPrefill() {
+        return prune({
+          firstName: str($('pf_firstName')?.value),
+          lastName: str($('pf_lastName')?.value),
+          email: str($('pf_email')?.value),
+          phone: str($('pf_phone')?.value),
+          currentStreet: str($('pf_currentStreet')?.value),
+          currentCity: str($('pf_currentCity')?.value),
+          currentState: str($('pf_currentState')?.value),
+          currentZip: str($('pf_currentZip')?.value),
+        });
+      }
+
       async function mintEnrollLink(id, outEl) {
         outEl.innerHTML = '<span class="muted">Minting link…</span>';
-        const { status, json } = await api('POST', '/api/listers/' + encodeURIComponent(id) + '/enrollment-session');
+        // Opt-in: only attach prefill when the "Enrollment prefill" panel is expanded — the inputs carry
+        // demo defaults, so otherwise every mint would silently include them.
+        const prefill = $('enrollPrefill')?.open ? readEnrollPrefill() : {};
+        const hasPrefill = Object.keys(prefill).length > 0;
+        const channel = $('pf_channel')?.value || 'body';
+        // Channel B sends the prefill in the request body (Burnt stores it with the single-use token).
+        // Channel A mints a plain link, then appends the fields to the URL #hash here (URL wins, SCR-479).
+        const body = hasPrefill && channel === 'body' ? { prefill } : undefined;
+        const { status, json } = await api('POST', '/api/listers/' + encodeURIComponent(id) + '/enrollment-session', body);
         if (status < 400 && json?.enrollment_url) {
+          let url = json.enrollment_url;
+          let channelNote = '';
+          if (hasPrefill && channel === 'url') {
+            const qs = Object.entries(prefill)
+              .map(([k, v]) => encodeURIComponent(k) + '=' + encodeURIComponent(v))
+              .join('&');
+            url += (url.includes('#') ? '&' : '#') + qs;
+            channelNote = ' · prefill in the URL #hash (channel A)';
+          } else if (hasPrefill) {
+            channelNote = ' · prefill sent in the API body (channel B)';
+          }
           const a = document.createElement('a');
-          a.href = json.enrollment_url;
+          a.href = url;
           a.target = '_blank';
           a.rel = 'noopener';
-          a.textContent = json.enrollment_url;
+          a.textContent = url;
           outEl.innerHTML =
-            `<div class="note ok"><strong>Enrollment link</strong> — send this to the lister; they open it (no Burnt account) and complete Experian enrollment. Single-use on success · 30-day expiry.</div>` +
+            `<div class="note ok"><strong>Enrollment link</strong> — send this to the lister; they open it (no Burnt account) and complete Experian enrollment. Single-use on success · 30-day expiry${channelNote}.</div>` +
             `<div class="summary"></div>`;
           outEl.querySelector('.summary').appendChild(a);
         } else {
