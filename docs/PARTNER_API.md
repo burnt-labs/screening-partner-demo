@@ -136,7 +136,7 @@ re-keying (both feed the same fields, and the lister can still edit anything):
 - **In the API call (recommended):** include a `prefill` object in the request body. It is stored with the
   token and applied server-side, so **no personal data appears in the URL**.
 
-  ```json
+  ```
   POST /api/v1/listers/{listerId}/enrollment-session
   { "prefill": { "firstName": "Jane", "lastName": "Doe", "email": "jane@oakwood.example",
                  "phone": "(555) 123-4567", "currentStreet": "123 Main St", "currentCity": "Austin",

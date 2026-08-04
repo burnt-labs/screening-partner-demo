@@ -548,7 +548,9 @@
 
       async function mintEnrollLink(id, outEl) {
         outEl.innerHTML = '<span class="muted">Minting link…</span>';
-        const prefill = readEnrollPrefill();
+        // Opt-in: only attach prefill when the "Enrollment prefill" panel is expanded — the inputs carry
+        // demo defaults, so otherwise every mint would silently include them.
+        const prefill = $('enrollPrefill')?.open ? readEnrollPrefill() : {};
         const hasPrefill = Object.keys(prefill).length > 0;
         const channel = $('pf_channel')?.value || 'body';
         // Channel B sends the prefill in the request body (Burnt stores it with the single-use token).

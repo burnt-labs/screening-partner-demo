@@ -111,13 +111,22 @@ app.get(
     res.status(status).json(json);
   }),
 );
+// Allowlisted Intellirent screening.prefill fields (SCR-479). Personal identity only — the demo proxy
+// filters to these before forwarding so a direct caller can't push ssn/dateOfBirth/unknown keys, even
+// though the upstream API also sanitizes.
+const PREFILL_FIELDS = new Set([
+  'firstName', 'middleName', 'noMiddleName', 'lastName', 'email', 'phone', 'phoneType',
+  'currentStreet', 'currentStreet2', 'currentCity', 'currentState', 'currentZip',
+  'previousStreet', 'previousStreet2', 'previousCity', 'previousState', 'previousZip',
+]);
 // Mint the lister's tokenized no-login Experian enrollment URL. Optionally attach a `prefill` object
 // (SCR-479) so the Experian form opens pre-populated; sends no body when none is given (unchanged behavior).
 // Surface `enrollment_url` to the lister; they open it and complete enrollment with no Burnt account.
 app.post(
   '/api/listers/:id/enrollment-session',
   proxy(async (req, res) => {
-    const prefill = pruneEmpty(req.body?.prefill || {});
+    const raw = pruneEmpty(req.body?.prefill || {});
+    const prefill = Object.fromEntries(Object.entries(raw).filter(([k]) => PREFILL_FIELDS.has(k)));
     const body = Object.keys(prefill).length ? { prefill } : undefined;
     const { status, json } = await burntFetch(
       'POST',
