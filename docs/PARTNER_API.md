@@ -80,9 +80,10 @@ you can't provision a lister under another partner.
 `external_ref` is your own id for the lister (stored and echoed back on reads); the operator contact
 fields prefill the lister's Experian enrollment.
 
-`external_ref` is **unique among your listers** — it's your idempotency handle for a landlord.
-Re-sending a ref you've already used returns **409** with the existing lister's id instead of
-creating a duplicate, so a safe retry pattern is: on 409, take `lister_id` and continue.
+When provided, `external_ref` is **unique among your listers** — it's your idempotency handle for a
+landlord. Re-sending a ref you've already used returns **409** with the existing lister's id instead
+of creating a duplicate, so a safe retry pattern is: on 409, take `lister_id` and continue. Listers
+created without an `external_ref` never conflict.
 
 **409**
 
