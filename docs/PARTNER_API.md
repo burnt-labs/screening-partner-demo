@@ -128,6 +128,33 @@ The `#token=…` fragment authorizes that one lister's enrollment and, because i
 never sent to the Burnt server in the request line. The link is **single-use on success** and expires
 after 30 days — re-call to mint a fresh one. **404** if the lister isn't one you manage.
 
+#### Prefilling the enrollment form
+
+Two optional ways to pre-populate the lister's Experian enrollment form so they review/correct instead of
+re-keying (both feed the same fields, and the lister can still edit anything):
+
+- **In the API call (recommended):** include a `prefill` object in the request body. It is stored with the
+  token and applied server-side, so **no personal data appears in the URL**.
+
+  ```json
+  POST /api/v1/listers/{listerId}/enrollment-session
+  { "prefill": { "firstName": "Jane", "lastName": "Doe", "email": "jane@oakwood.example",
+                 "phone": "(555) 123-4567", "currentStreet": "123 Main St", "currentCity": "Austin",
+                 "currentState": "TX", "currentZip": "78701" } }
+  ```
+
+- **As URL params:** append allowlisted fields to the link's `#…` fragment, e.g.
+  `…/enroll/comp_lister_abc#token=<token>&firstName=Jane&email=jane@oakwood.example`. Because these ride in
+  the URL they land in the lister's browser history, so prefer the API body for anything sensitive.
+
+**Precedence:** a URL param overrides the same field sent in the API body; non-conflicting fields from both
+merge.
+
+**Allowlisted fields** (personal identity only): `firstName, middleName, noMiddleName, lastName, email,
+phone, phoneType, currentStreet, currentStreet2, currentCity, currentState, currentZip, previousStreet,
+previousStreet2, previousCity, previousState, previousZip`. Any other key — including `ssn`, `dateOfBirth`,
+and business/`companyName` fields — is ignored (the Experian enrollment form has no company-name field).
+
 ### Create a unit
 
 ```
