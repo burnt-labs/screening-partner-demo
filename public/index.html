@@ -197,6 +197,7 @@
             <div><label>email</label><input type="email" id="pf_email" value="dana.reed@oakwood.example" /></div>
             <div><label>phone</label><input type="text" id="pf_phone" value="(512) 555-0143" /></div>
             <div class="full"><label>currentStreet</label><input type="text" id="pf_currentStreet" value="123 Congress Ave" /></div>
+            <div class="full"><label>currentStreet2</label><input type="text" id="pf_currentStreet2" placeholder="Apt, unit, etc. (optional)" /></div>
             <div><label>currentCity</label><input type="text" id="pf_currentCity" value="Austin" /></div>
             <div><label>currentState</label><input type="text" id="pf_currentState" value="TX" /></div>
             <div><label>currentZip</label><input type="text" id="pf_currentZip" value="78701" /></div>
@@ -506,6 +507,15 @@
             `<div class="note ${enrolled ? 'ok' : 'warn'}">${enrolled ? 'Already enrolled — you can screen under this lister now.' : 'Not enrolled yet. Get the enrollment link below and have the lister complete it before screening under this lister.'}</div>` +
             listerRowActions(l.id) +
             `<div class="fieldhint">The create-unit form (section 1) is pre-filled with this <code>lister_id</code>.</div>`;
+        } else if (status === 409 && json?.code === 'external_ref_in_use' && json?.lister_id) {
+          // The documented retry pattern: on 409 the ref already names one of your listers — take
+          // `lister_id` and continue with the existing lister instead of creating a duplicate.
+          $('unit_lister_id').value = json.lister_id;
+          summary =
+            `<div class="note warn">This <code>external_ref</code> already names one of your listers — no duplicate was created. Continuing with the existing lister.</div>` +
+            `<dl class="kv"><dt>existing lister id</dt><dd><code>${esc(json.lister_id)}</code></dd></dl>` +
+            listerRowActions(json.lister_id) +
+            `<div class="fieldhint">The create-unit form (section 1) is pre-filled with this <code>lister_id</code>.</div>`;
         }
         render($('listerResult'), status, json, summary);
       });
@@ -540,6 +550,7 @@
           email: str($('pf_email')?.value),
           phone: str($('pf_phone')?.value),
           currentStreet: str($('pf_currentStreet')?.value),
+          currentStreet2: str($('pf_currentStreet2')?.value),
           currentCity: str($('pf_currentCity')?.value),
           currentState: str($('pf_currentState')?.value),
           currentZip: str($('pf_currentZip')?.value),

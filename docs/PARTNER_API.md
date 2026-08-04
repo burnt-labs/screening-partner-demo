@@ -80,6 +80,21 @@ you can't provision a lister under another partner.
 `external_ref` is your own id for the lister (stored and echoed back on reads); the operator contact
 fields prefill the lister's Experian enrollment.
 
+When provided, `external_ref` is **unique among your listers** — it's your idempotency handle for a
+landlord. Re-sending a ref you've already used returns **409** with the existing lister's id instead
+of creating a duplicate, so a safe retry pattern is: on 409, take `lister_id` and continue. Listers
+created without an `external_ref` never conflict.
+
+**409**
+
+```json
+{
+  "error": "external_ref 'your-stable-lister-id' is already in use by another lister",
+  "code": "external_ref_in_use",
+  "lister_id": "comp_lister_abc"
+}
+```
+
 **201**
 
 ```json
@@ -651,6 +666,7 @@ back via the `lister_id` you passed on **Create a unit**).
 | `403 { "code": "API_KEY_SCOPE" }` | A key was used on a non-`/api/v1` (dashboard) endpoint   |
 | `403`                             | The company account is disabled                          |
 | `404`                             | Unknown resource, or a resource owned by another company |
+| `409 { "code": "external_ref_in_use" }` | Lister `external_ref` already in use — body carries the existing `lister_id` |
 
 ## Typical integration flow
 
