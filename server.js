@@ -133,7 +133,10 @@ app.post(
     const prefill = Object.fromEntries(Object.entries(raw).filter(([k]) => PREFILL_FIELDS.has(k)));
     const body = {};
     if (Object.keys(prefill).length) body.prefill = prefill;
-    if (req.body && 'enrollment_type' in req.body) body.enrollment_type = req.body.enrollment_type;
+    // typeof guard: a primitive JSON body (e.g. `"foo"`) would make the `in` operator throw.
+    if (req.body && typeof req.body === 'object' && 'enrollment_type' in req.body) {
+      body.enrollment_type = req.body.enrollment_type;
+    }
     const { status, json } = await burntFetch(
       'POST',
       `/api/v1/listers/${encodeURIComponent(req.params.id)}/enrollment-session`,
