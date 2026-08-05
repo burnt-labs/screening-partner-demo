@@ -81,12 +81,13 @@ you can't provision a lister under another partner.
 `external_ref` is your own id for the lister (stored and echoed back on reads); the operator contact
 fields prefill the lister's Experian enrollment.
 
-`enrollment_type` (optional) pre-selects the Experian enrollment's opening question — "How will you
-be screening renters?" — so the lister can skip it: `"individual"` for a landlord screening in their
-own name (e.g. a p2p lister), `"business"` for one screening under a registered business/LLC (e.g. a
-b2b lister). Omitted or `null` means the lister answers the chooser themselves. Any other value is a
-`400` — map your own flags to these two before calling. Echoed back as `enrollment_type` on reads,
-and changeable later when minting an enrollment link (below).
+`enrollment_type` (optional) answers the Experian enrollment's opening question — "How will you be
+screening renters?" — on the lister's behalf, so they skip it and land straight on the right form:
+`"individual"` for a landlord screening in their own name (e.g. a p2p lister), `"business"` for one
+screening under a registered business/LLC (e.g. a b2b lister, whose enrollment then includes the
+business details step). Omitted or `null` means the lister answers the question themselves. Any other
+value is a `400` — map your own flags to these two before calling. Echoed back as `enrollment_type` on
+reads, and changeable later when minting an enrollment link (below).
 
 When provided, `external_ref` is **unique among your listers** — it's your idempotency handle for a
 landlord. Re-sending a ref you've already used returns **409** with the existing lister's id instead
@@ -186,9 +187,10 @@ merge.
 
 **Allowlisted fields**: `firstName, middleName, noMiddleName, lastName, email, phone, phoneType,
 currentStreet, currentStreet2, currentCity, currentState, currentZip, previousStreet, previousStreet2,
-previousCity, previousState, previousZip`, plus the business-enrollment fields `companyName` and
-`noLegalEntity` (used when the lister enrolls as a registered business). Any other key — including
-`ssn` and `dateOfBirth`, which the Experian enrollment no longer collects at all — is ignored.
+previousCity, previousState, previousZip`, plus `companyName` (accepted and stored — Experian's
+enrollment form does not apply it yet, so treat it as forward-looking). Any other key is ignored,
+including `ssn` and `dateOfBirth` (the enrollment no longer collects them at all) and `noLegalEntity`
+(Experian derives it from the lister's `enrollment_type`).
 
 ### Create a unit
 

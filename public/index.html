@@ -198,7 +198,7 @@
         <!-- Enrollment prefill (SCR-479): optionally pre-populate the lister's Experian enrollment form. -->
         <details id="enrollPrefill" style="margin-top: 6px">
           <summary style="cursor: pointer; font-weight: 600">Enrollment prefill <span class="opt">· optional (SCR-479)</span></summary>
-          <p class="hint">Pre-populate the lister's Experian enrollment form so they review instead of re-key. <strong>No SSN/DOB</strong> — the enrollment no longer collects them at all. Business enrollments can prefill <code>companyName</code> / <code>noLegalEntity</code>. Applied when you click <strong>Get enrollment link</strong> below.</p>
+          <p class="hint">Pre-populate the lister's Experian enrollment form so they review instead of re-key. <strong>No SSN/DOB</strong> — the enrollment no longer collects them at all. Applied when you click <strong>Get enrollment link</strong> below.</p>
           <div class="grid">
             <div><label>firstName</label><input type="text" id="pf_firstName" value="Dana" /></div>
             <div><label>lastName</label><input type="text" id="pf_lastName" value="Reed" /></div>
@@ -209,11 +209,7 @@
             <div><label>currentCity</label><input type="text" id="pf_currentCity" value="Austin" /></div>
             <div><label>currentState</label><input type="text" id="pf_currentState" value="TX" /></div>
             <div><label>currentZip</label><input type="text" id="pf_currentZip" value="78701" /></div>
-            <div class="full"><label>companyName <span class="opt">(business enrollment only)</span></label><input type="text" id="pf_companyName" placeholder="Oakwood Property Management LLC" /></div>
-            <div class="full" style="display: flex; gap: 6px; align-items: center">
-              <input type="checkbox" id="pf_noLegalEntity" style="width: auto" />
-              <label for="pf_noLegalEntity" style="margin: 0">noLegalEntity <span class="opt">(business enrollment: no registered legal entity)</span></label>
-            </div>
+            <div class="full"><label>companyName <span class="opt">(stored — Experian's form doesn't apply it yet)</span></label><input type="text" id="pf_companyName" placeholder="Oakwood Property Management LLC" /></div>
             <div class="full">
               <label>enrollment_type override <span class="opt">(optional — sent with the mint; also settable at provision above)</span></label>
               <select id="pf_enrollmentType">
@@ -579,7 +575,6 @@
           currentState: str($('pf_currentState')?.value),
           currentZip: str($('pf_currentZip')?.value),
           companyName: str($('pf_companyName')?.value),
-          ...($('pf_noLegalEntity')?.checked ? { noLegalEntity: true } : {}),
         });
       }
 

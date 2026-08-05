@@ -111,15 +111,16 @@ app.get(
     res.status(status).json(json);
   }),
 );
-// Allowlisted Intellirent screening.prefill fields (SCR-479). Personal identity + the END_USER
-// business-enrollment fields (companyName, noLegalEntity) — the demo proxy filters to these before
+// Allowlisted Intellirent screening.prefill fields (SCR-479) — the demo proxy filters to these before
 // forwarding so a direct caller can't push ssn/dateOfBirth/unknown keys, even though the upstream API
-// also sanitizes. (The Experian enrollment no longer collects SSN/DOB upstream at all.)
+// also sanitizes. (The Experian enrollment no longer collects SSN/DOB upstream at all.) `companyName`
+// is accepted and stored but Experian's form ignores it today; `noLegalEntity` is NOT accepted —
+// Experian derives it from the lister's enrollment_type.
 const PREFILL_FIELDS = new Set([
   'firstName', 'middleName', 'noMiddleName', 'lastName', 'email', 'phone', 'phoneType',
   'currentStreet', 'currentStreet2', 'currentCity', 'currentState', 'currentZip',
   'previousStreet', 'previousStreet2', 'previousCity', 'previousState', 'previousZip',
-  'companyName', 'noLegalEntity',
+  'companyName',
 ]);
 // Mint the lister's tokenized no-login Experian enrollment URL. Optionally attach a `prefill` object
 // (SCR-479) so the Experian form opens pre-populated, and/or an `enrollment_type` override — forwarded
