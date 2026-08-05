@@ -111,27 +111,37 @@ app.get(
     res.status(status).json(json);
   }),
 );
-// Allowlisted Intellirent screening.prefill fields (SCR-479). Personal identity only — the demo proxy
-// filters to these before forwarding so a direct caller can't push ssn/dateOfBirth/unknown keys, even
-// though the upstream API also sanitizes.
+// Allowlisted Intellirent screening.prefill fields (SCR-479) — the demo proxy filters to these before
+// forwarding so a direct caller can't push ssn/dateOfBirth/unknown keys, even though the upstream API
+// also sanitizes. (The Experian enrollment no longer collects SSN/DOB upstream at all.) `companyName`
+// is accepted and stored but Experian's form ignores it today; `noLegalEntity` is NOT accepted —
+// Experian derives it from the lister's enrollment_type.
 const PREFILL_FIELDS = new Set([
   'firstName', 'middleName', 'noMiddleName', 'lastName', 'email', 'phone', 'phoneType',
   'currentStreet', 'currentStreet2', 'currentCity', 'currentState', 'currentZip',
   'previousStreet', 'previousStreet2', 'previousCity', 'previousState', 'previousZip',
+  'companyName',
 ]);
 // Mint the lister's tokenized no-login Experian enrollment URL. Optionally attach a `prefill` object
-// (SCR-479) so the Experian form opens pre-populated; sends no body when none is given (unchanged behavior).
+// (SCR-479) so the Experian form opens pre-populated, and/or an `enrollment_type` override — forwarded
+// verbatim INCLUDING an explicit null (= clear): the API distinguishes absent vs null vs value and 400s
+// anything else, which the demo surfaces as-is. Sends no body when there's nothing to send.
 // Surface `enrollment_url` to the lister; they open it and complete enrollment with no Burnt account.
 app.post(
   '/api/listers/:id/enrollment-session',
   proxy(async (req, res) => {
     const raw = pruneEmpty(req.body?.prefill || {});
     const prefill = Object.fromEntries(Object.entries(raw).filter(([k]) => PREFILL_FIELDS.has(k)));
-    const body = Object.keys(prefill).length ? { prefill } : undefined;
+    const body = {};
+    if (Object.keys(prefill).length) body.prefill = prefill;
+    // typeof guard: a primitive JSON body (e.g. `"foo"`) would make the `in` operator throw.
+    if (req.body && typeof req.body === 'object' && 'enrollment_type' in req.body) {
+      body.enrollment_type = req.body.enrollment_type;
+    }
     const { status, json } = await burntFetch(
       'POST',
       `/api/v1/listers/${encodeURIComponent(req.params.id)}/enrollment-session`,
-      body,
+      Object.keys(body).length ? body : undefined,
     );
     res.status(status).json(json);
   }),
