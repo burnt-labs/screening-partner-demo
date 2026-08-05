@@ -73,12 +73,20 @@ you can't provision a lister under another partner.
   "owner_email": "manager@oakwood.example",
   "operator_first_name": "Dana",
   "operator_last_name": "Reed",
-  "operator_phone": "+15125550143"
+  "operator_phone": "+15125550143",
+  "enrollment_type": "individual"
 }
 ```
 
 `external_ref` is your own id for the lister (stored and echoed back on reads); the operator contact
 fields prefill the lister's Experian enrollment.
+
+`enrollment_type` (optional) pre-selects the Experian enrollment's opening question — "How will you
+be screening renters?" — so the lister can skip it: `"individual"` for a landlord screening in their
+own name (e.g. a p2p lister), `"business"` for one screening under a registered business/LLC (e.g. a
+b2b lister). Omitted or `null` means the lister answers the chooser themselves. Any other value is a
+`400` — map your own flags to these two before calling. Echoed back as `enrollment_type` on reads,
+and changeable later when minting an enrollment link (below).
 
 When provided, `external_ref` is **unique among your listers** — it's your idempotency handle for a
 landlord. Re-sending a ref you've already used returns **409** with the existing lister's id instead
@@ -104,6 +112,7 @@ created without an `external_ref` never conflict.
     "name": "Oakwood Property Management",
     "external_ref": "your-stable-lister-id",
     "enrollment_status": "not_started",
+    "enrollment_type": "individual",
     "created_at": "2026-07-28T00:00:00.000Z"
   }
 }
@@ -143,6 +152,16 @@ The `#token=…` fragment authorizes that one lister's enrollment and, because i
 never sent to the Burnt server in the request line. The link is **single-use on success** and expires
 after 30 days — re-call to mint a fresh one. **404** if the lister isn't one you manage.
 
+You may also set or change the lister's `enrollment_type` in the same call by including it in the
+request body: `"individual"` or `"business"` updates the stored value, an explicit `null` clears it
+(the lister answers Experian's chooser themselves), and leaving the key out changes nothing. An
+invalid value is a **400** and the current enrollment link is left untouched.
+
+```json
+POST /api/v1/listers/{listerId}/enrollment-session
+{ "enrollment_type": "business" }
+```
+
 #### Prefilling the enrollment form
 
 Two optional ways to pre-populate the lister's Experian enrollment form so they review/correct instead of
@@ -165,10 +184,11 @@ re-keying (both feed the same fields, and the lister can still edit anything):
 **Precedence:** a URL param overrides the same field sent in the API body; non-conflicting fields from both
 merge.
 
-**Allowlisted fields** (personal identity only): `firstName, middleName, noMiddleName, lastName, email,
-phone, phoneType, currentStreet, currentStreet2, currentCity, currentState, currentZip, previousStreet,
-previousStreet2, previousCity, previousState, previousZip`. Any other key — including `ssn`, `dateOfBirth`,
-and business/`companyName` fields — is ignored (the Experian enrollment form has no company-name field).
+**Allowlisted fields**: `firstName, middleName, noMiddleName, lastName, email, phone, phoneType,
+currentStreet, currentStreet2, currentCity, currentState, currentZip, previousStreet, previousStreet2,
+previousCity, previousState, previousZip`, plus the business-enrollment fields `companyName` and
+`noLegalEntity` (used when the lister enrolls as a registered business). Any other key — including
+`ssn` and `dateOfBirth`, which the Experian enrollment no longer collects at all — is ignored.
 
 ### Create a unit
 

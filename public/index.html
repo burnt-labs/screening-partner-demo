@@ -180,6 +180,14 @@
               <label>operator_phone <span class="opt">(optional — prefills the enrollment)</span></label>
               <input type="text" id="lister_phone" value="+15125550143" />
             </div>
+            <div class="full">
+              <label>enrollment_type <span class="opt">(optional — pre-selects Experian's "Individual vs Registered business" chooser)</span></label>
+              <select id="lister_enrollment_type">
+                <option value="">unset — the lister answers the chooser themselves</option>
+                <option value="individual">individual — screens in their own name (e.g. a p2p lister)</option>
+                <option value="business">business — screens under a registered business/LLC (e.g. a b2b lister)</option>
+              </select>
+            </div>
           </div>
           <div class="row-actions">
             <button type="submit">Provision lister</button>
@@ -190,7 +198,7 @@
         <!-- Enrollment prefill (SCR-479): optionally pre-populate the lister's Experian enrollment form. -->
         <details id="enrollPrefill" style="margin-top: 6px">
           <summary style="cursor: pointer; font-weight: 600">Enrollment prefill <span class="opt">· optional (SCR-479)</span></summary>
-          <p class="hint">Pre-populate the lister's Experian enrollment form so they review instead of re-key. Personal identity only — <strong>no SSN/DOB</strong>, and company name isn't an Experian field. Applied when you click <strong>Get enrollment link</strong> below.</p>
+          <p class="hint">Pre-populate the lister's Experian enrollment form so they review instead of re-key. <strong>No SSN/DOB</strong> — the enrollment no longer collects them at all. Business enrollments can prefill <code>companyName</code> / <code>noLegalEntity</code>. Applied when you click <strong>Get enrollment link</strong> below.</p>
           <div class="grid">
             <div><label>firstName</label><input type="text" id="pf_firstName" value="Dana" /></div>
             <div><label>lastName</label><input type="text" id="pf_lastName" value="Reed" /></div>
@@ -201,6 +209,20 @@
             <div><label>currentCity</label><input type="text" id="pf_currentCity" value="Austin" /></div>
             <div><label>currentState</label><input type="text" id="pf_currentState" value="TX" /></div>
             <div><label>currentZip</label><input type="text" id="pf_currentZip" value="78701" /></div>
+            <div class="full"><label>companyName <span class="opt">(business enrollment only)</span></label><input type="text" id="pf_companyName" placeholder="Oakwood Property Management LLC" /></div>
+            <div class="full" style="display: flex; gap: 6px; align-items: center">
+              <input type="checkbox" id="pf_noLegalEntity" style="width: auto" />
+              <label for="pf_noLegalEntity" style="margin: 0">noLegalEntity <span class="opt">(business enrollment: no registered legal entity)</span></label>
+            </div>
+            <div class="full">
+              <label>enrollment_type override <span class="opt">(optional — sent with the mint; also settable at provision above)</span></label>
+              <select id="pf_enrollmentType">
+                <option value="">— leave as provisioned</option>
+                <option value="individual">individual</option>
+                <option value="business">business</option>
+                <option value="clear">clear (send null — lister answers the chooser)</option>
+              </select>
+            </div>
             <div class="full">
               <label>channel</label>
               <select id="pf_channel">
@@ -493,6 +515,7 @@
           operator_first_name: str($('lister_first').value),
           operator_last_name: str($('lister_last').value),
           operator_phone: str($('lister_phone').value),
+          enrollment_type: str($('lister_enrollment_type')?.value),
         });
         $('listerResult').innerHTML = '<span class="muted">Provisioning…</span>';
         const { status, json } = await api('POST', '/api/create-lister', body);
@@ -503,7 +526,8 @@
           const enrolled = l.enrollment_status === 'verified';
           summary =
             `<dl class="kv"><dt>lister id</dt><dd><code>${esc(l.id)}</code></dd>` +
-            `<dt>enrollment_status</dt><dd><strong>${esc(l.enrollment_status)}</strong></dd></dl>` +
+            `<dt>enrollment_status</dt><dd><strong>${esc(l.enrollment_status)}</strong></dd>` +
+            `<dt>enrollment_type</dt><dd>${esc(l.enrollment_type ?? '— (lister answers the chooser)')}</dd></dl>` +
             `<div class="note ${enrolled ? 'ok' : 'warn'}">${enrolled ? 'Already enrolled — you can screen under this lister now.' : 'Not enrolled yet. Get the enrollment link below and have the lister complete it before screening under this lister.'}</div>` +
             listerRowActions(l.id) +
             `<div class="fieldhint">The create-unit form (section 1) is pre-filled with this <code>lister_id</code>.</div>`;
@@ -529,14 +553,14 @@
           const rows = json.data
             .map(
               (l) =>
-                `<tr><td><code>${esc(l.id)}</code></td><td>${esc(l.name ?? '—')}</td><td>${esc(l.external_ref ?? '—')}</td><td>${esc(l.enrollment_status)}</td>` +
+                `<tr><td><code>${esc(l.id)}</code></td><td>${esc(l.name ?? '—')}</td><td>${esc(l.external_ref ?? '—')}</td><td>${esc(l.enrollment_status)}</td><td>${esc(l.enrollment_type ?? '—')}</td>` +
                 `<td style="white-space:nowrap"><button type="button" class="secondary" data-enroll="${esc(l.id)}">enroll link</button> <button type="button" class="secondary" data-useunit="${esc(l.id)}">use ↓</button></td></tr>` +
-                `<tr><td colspan="5"><div class="result" data-enrollout="${esc(l.id)}"></div></td></tr>`,
+                `<tr><td colspan="6"><div class="result" data-enrollout="${esc(l.id)}"></div></td></tr>`,
             )
             .join('');
           summary =
-            `<table><thead><tr><th>id</th><th>name</th><th>external_ref</th><th>enrollment</th><th></th></tr></thead>` +
-            `<tbody>${rows || '<tr><td colspan="5" class="muted">no listers yet — provision one above</td></tr>'}</tbody></table>`;
+            `<table><thead><tr><th>id</th><th>name</th><th>external_ref</th><th>enrollment</th><th>type</th><th></th></tr></thead>` +
+            `<tbody>${rows || '<tr><td colspan="6" class="muted">no listers yet — provision one above</td></tr>'}</tbody></table>`;
         }
         render($('listerResult'), status, json, summary);
       }
@@ -554,6 +578,8 @@
           currentCity: str($('pf_currentCity')?.value),
           currentState: str($('pf_currentState')?.value),
           currentZip: str($('pf_currentZip')?.value),
+          companyName: str($('pf_companyName')?.value),
+          ...($('pf_noLegalEntity')?.checked ? { noLegalEntity: true } : {}),
         });
       }
 
@@ -566,8 +592,17 @@
         const channel = $('pf_channel')?.value || 'body';
         // Channel B sends the prefill in the request body (Burnt stores it with the single-use token).
         // Channel A mints a plain link, then appends the fields to the URL #hash here (URL wins, SCR-479).
-        const body = hasPrefill && channel === 'body' ? { prefill } : undefined;
-        const { status, json } = await api('POST', '/api/listers/' + encodeURIComponent(id) + '/enrollment-session', body);
+        const body = {};
+        if (hasPrefill && channel === 'body') body.prefill = prefill;
+        // Mint-time enrollment_type override: value = set it, "clear" = send null (back to Experian's
+        // chooser), blank = leave the key out entirely (no change). Same opt-in gate as the prefill panel.
+        const enrollTypeOverride = $('enrollPrefill')?.open ? $('pf_enrollmentType')?.value || '' : '';
+        if (enrollTypeOverride) body.enrollment_type = enrollTypeOverride === 'clear' ? null : enrollTypeOverride;
+        const { status, json } = await api(
+          'POST',
+          '/api/listers/' + encodeURIComponent(id) + '/enrollment-session',
+          Object.keys(body).length ? body : undefined,
+        );
         if (status < 400 && json?.enrollment_url) {
           let url = json.enrollment_url;
           let channelNote = '';
