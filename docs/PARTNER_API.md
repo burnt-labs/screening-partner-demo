@@ -232,6 +232,10 @@ unit — and every screening under it — **owned by that lister**. The lister b
 record for the applicants, while **you** remain the payer and the webhook recipient. Omit `lister_id`
 to create the unit under your own company. A `lister_id` you don't manage returns `404`. The lister
 must be `verified` before an applicant can run the Experian step.
+The unit response echoes `lister_id` — the lister that owns it, or `null` when you own it directly — so
+you can always confirm where a unit landed. Units owned by a lister you manage also appear in your Burnt
+dashboard, flagged as belonging to a managed lister.
+
 
 **Payment.** The screening package has a single total (**currently $20**). Who pays is controlled by `fee_payer` in the `screening`
 object:
