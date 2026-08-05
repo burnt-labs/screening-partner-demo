@@ -563,6 +563,26 @@
       }
       $('listerReload').addEventListener('click', loadListers);
 
+      // Keep the prefill panel in step with the lister form above. The mint-time prefill OVERRIDES the
+      // lister record server-side, so a stale demo default here would quietly beat the name/email/phone
+      // you just typed into section A. Mirror each field until you hand-edit its prefill counterpart.
+      [
+        ['lister_first', 'pf_firstName'],
+        ['lister_last', 'pf_lastName'],
+        ['lister_owner_email', 'pf_email'],
+        ['lister_phone', 'pf_phone'],
+      ].forEach(([sourceId, targetId]) => {
+        const source = $(sourceId);
+        const target = $(targetId);
+        if (!source || !target) return;
+        target.addEventListener('input', () => {
+          target.dataset.touched = '1';
+        });
+        source.addEventListener('input', () => {
+          if (!target.dataset.touched) target.value = source.value;
+        });
+      });
+
       // Read the optional enrollment prefill (SCR-479) — allowlisted personal-identity fields only.
       function readEnrollPrefill() {
         return prune({
