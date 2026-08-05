@@ -187,10 +187,16 @@ merge.
 
 **Allowlisted fields**: `firstName, middleName, noMiddleName, lastName, email, phone, phoneType,
 currentStreet, currentStreet2, currentCity, currentState, currentZip, previousStreet, previousStreet2,
-previousCity, previousState, previousZip`, plus `companyName` (accepted and stored — Experian's
-enrollment form does not apply it yet, so treat it as forward-looking). Any other key is ignored,
-including `ssn` and `dateOfBirth` (the enrollment no longer collects them at all) and `noLegalEntity`
-(Experian derives it from the lister's `enrollment_type`).
+previousCity, previousState, previousZip`. Any other key is ignored, including `ssn` and `dateOfBirth`
+(the enrollment no longer collects them at all).
+
+`phone` is normalized to the 10-digit US format Experian's form expects, so E.164 (`+15125550143`) is
+fine to send — it is converted rather than mis-parsed.
+
+**Business enrollment can't be prefilled.** Experian's form currently rejects business fields
+(`companyName`, `noLegalEntity`) and exposes no EIN/business-address keys, so a lister with
+`enrollment_type: "business"` fills in its own Business Details step. The personal fields above still
+apply. `noLegalEntity` is derived by Experian from the lister's `enrollment_type`.
 
 ### Create a unit
 
