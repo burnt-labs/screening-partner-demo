@@ -102,8 +102,9 @@ provision and address with your **one** API key:
 > **Prefill the enrollment form (optional, SCR-479):** pass a `prefill` object in the enrollment-session
 > call (recommended — stored with the token, no PII in the URL), or append allowlisted fields to the link's
 > `#hash`. Section **A** has a collapsible **Enrollment prefill** panel with a body/URL channel toggle.
-> No SSN/DOB (the enrollment no longer collects them). `companyName` is accepted and stored, but
-> Experian's form doesn't apply it yet.
+> No SSN/DOB (the enrollment no longer collects them), and **business enrollment can't be prefilled** —
+> Experian rejects `companyName`/`noLegalEntity`, so a `business` lister keys its own Business Details
+> step (the personal fields still apply).
 
 You stay the **payer** (operator-covered charges hit your card) and the **webhook recipient** (every event
 for a lister's screening is delivered to your endpoint with your signature). Your key acts only on listers

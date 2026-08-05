@@ -195,10 +195,12 @@
           </div>
         </form>
 
-        <!-- Enrollment prefill (SCR-479): optionally pre-populate the lister's Experian enrollment form. -->
-        <details id="enrollPrefill" style="margin-top: 6px">
-          <summary style="cursor: pointer; font-weight: 600">Enrollment prefill <span class="opt">· optional (SCR-479)</span></summary>
-          <p class="hint">Pre-populate the lister's Experian enrollment form so they review instead of re-key. <strong>No SSN/DOB</strong> — the enrollment no longer collects them at all. Applied when you click <strong>Get enrollment link</strong> below.</p>
+        <!-- Enrollment prefill (SCR-479): pre-populate the lister's Experian enrollment form.
+             Open by default and always sent — a collapsed panel used to silently drop everything
+             typed here, which looked exactly like Experian ignoring the prefill (SCR-488). -->
+        <details id="enrollPrefill" style="margin-top: 6px" open>
+          <summary style="cursor: pointer; font-weight: 600">Enrollment prefill</summary>
+          <p class="hint">Pre-populate the lister's Experian enrollment form so they review instead of re-key. <strong>No SSN/DOB</strong> — the enrollment no longer collects them at all. Every non-empty field below is sent when you click <strong>Get enrollment link</strong>; the result panel lists exactly what was attached. Clear a field to leave it out.</p>
           <div class="grid">
             <div><label>firstName</label><input type="text" id="pf_firstName" value="Dana" /></div>
             <div><label>lastName</label><input type="text" id="pf_lastName" value="Reed" /></div>
@@ -209,7 +211,6 @@
             <div><label>currentCity</label><input type="text" id="pf_currentCity" value="Austin" /></div>
             <div><label>currentState</label><input type="text" id="pf_currentState" value="TX" /></div>
             <div><label>currentZip</label><input type="text" id="pf_currentZip" value="78701" /></div>
-            <div class="full"><label>companyName <span class="opt">(stored — Experian's form doesn't apply it yet)</span></label><input type="text" id="pf_companyName" placeholder="Oakwood Property Management LLC" /></div>
             <div class="full">
               <label>enrollment_type override <span class="opt">(optional — sent with the mint; also settable at provision above)</span></label>
               <select id="pf_enrollmentType">
@@ -562,6 +563,26 @@
       }
       $('listerReload').addEventListener('click', loadListers);
 
+      // Keep the prefill panel in step with the lister form above. The mint-time prefill OVERRIDES the
+      // lister record server-side, so a stale demo default here would quietly beat the name/email/phone
+      // you just typed into section A. Mirror each field until you hand-edit its prefill counterpart.
+      [
+        ['lister_first', 'pf_firstName'],
+        ['lister_last', 'pf_lastName'],
+        ['lister_owner_email', 'pf_email'],
+        ['lister_phone', 'pf_phone'],
+      ].forEach(([sourceId, targetId]) => {
+        const source = $(sourceId);
+        const target = $(targetId);
+        if (!source || !target) return;
+        target.addEventListener('input', () => {
+          target.dataset.touched = '1';
+        });
+        source.addEventListener('input', () => {
+          if (!target.dataset.touched) target.value = source.value;
+        });
+      });
+
       // Read the optional enrollment prefill (SCR-479) — allowlisted personal-identity fields only.
       function readEnrollPrefill() {
         return prune({
@@ -574,15 +595,15 @@
           currentCity: str($('pf_currentCity')?.value),
           currentState: str($('pf_currentState')?.value),
           currentZip: str($('pf_currentZip')?.value),
-          companyName: str($('pf_companyName')?.value),
         });
       }
 
       async function mintEnrollLink(id, outEl) {
         outEl.innerHTML = '<span class="muted">Minting link…</span>';
-        // Opt-in: only attach prefill when the "Enrollment prefill" panel is expanded — the inputs carry
-        // demo defaults, so otherwise every mint would silently include them.
-        const prefill = $('enrollPrefill')?.open ? readEnrollPrefill() : {};
+        // Always send whatever is typed above. This used to be gated on the prefill panel being
+        // expanded, which silently dropped every field when the (collapsed-by-default) panel was
+        // closed — indistinguishable from Experian ignoring the prefill. Clear a field to omit it.
+        const prefill = readEnrollPrefill();
         const hasPrefill = Object.keys(prefill).length > 0;
         const channel = $('pf_channel')?.value || 'body';
         // Channel B sends the prefill in the request body (Burnt stores it with the single-use token).
@@ -590,8 +611,8 @@
         const body = {};
         if (hasPrefill && channel === 'body') body.prefill = prefill;
         // Mint-time enrollment_type override: value = set it, "clear" = send null (back to Experian's
-        // chooser), blank = leave the key out entirely (no change). Same opt-in gate as the prefill panel.
-        const enrollTypeOverride = $('enrollPrefill')?.open ? $('pf_enrollmentType')?.value || '' : '';
+        // chooser), blank = leave the key out entirely (no change).
+        const enrollTypeOverride = $('pf_enrollmentType')?.value || '';
         if (enrollTypeOverride) body.enrollment_type = enrollTypeOverride === 'clear' ? null : enrollTypeOverride;
         const { status, json } = await api(
           'POST',
@@ -615,9 +636,20 @@
           a.target = '_blank';
           a.rel = 'noopener';
           a.textContent = url;
+          // Spell out exactly what went with the mint. Silence here is what made an unsent prefill
+          // look like Experian ignoring it.
+          const attached = hasPrefill
+            ? `<div class="fieldhint">Prefill attached (${Object.keys(prefill).length} field${Object.keys(prefill).length === 1 ? '' : 's'}): <code>${esc(Object.keys(prefill).join(', '))}</code></div>`
+            : `<div class="note warn">No prefill attached — every field in the <strong>Enrollment prefill</strong> panel was empty, so the lister sees only what's on their lister record.</div>`;
+          const typeNote =
+            'enrollment_type' in body
+              ? `<div class="fieldhint">enrollment_type sent: <code>${esc(String(body.enrollment_type))}</code></div>`
+              : '';
           outEl.innerHTML =
             `<div class="note ok"><strong>Enrollment link</strong> — send this to the lister; they open it (no Burnt account) and complete Experian enrollment. Single-use on success · 30-day expiry${channelNote}.</div>` +
-            `<div class="summary"></div>`;
+            `<div class="summary"></div>` +
+            attached +
+            typeNote;
           outEl.querySelector('.summary').appendChild(a);
         } else {
           render(outEl, status, json, '');
