@@ -245,8 +245,11 @@
             </div>
             <div class="full">
               <label>lister_id <span class="opt">(optional — aggregators; from section A)</span></label>
-              <input type="text" id="unit_lister_id" placeholder="comp_… (blank = your own company)" />
-              <div class="fieldhint">Set this to create the unit — and its screenings — under a lister you manage (auto-filled when you provision/select one in section A). The lister must be enrolled (<code>verified</code>) before its applicants can run the Experian step.</div>
+              <div style="display: flex; gap: 6px; align-items: center">
+                <input type="text" id="unit_lister_id" placeholder="comp_… (blank = your own company)" style="flex: 1" />
+                <button type="button" class="secondary" id="clearListerId" title="Create this unit under your own company instead">Clear</button>
+              </div>
+              <div class="fieldhint">Set this to create the unit — and its screenings — under a lister you manage. It is auto-filled when you provision or select a lister in section A <strong>and stays set until you clear it</strong>, so check the owner line by the Create unit button before submitting. The lister must be enrolled (<code>verified</code>) before its applicants can run the Experian step.</div>
             </div>
             <div>
               <label>unit_label <span class="opt">(optional)</span></label>
@@ -318,8 +321,9 @@
               <div class="fieldhint" id="pmHint">Required when the landlord owes &gt; $0 — i.e. <code>operator</code> mode, or <code>applicant</code> with pays below the package total. Load your saved cards, or paste an id from the dashboard (Settings → Billing).</div>
             </div>
           </div>
-          <div class="row-actions">
+          <div class="row-actions" style="align-items: center; gap: 10px">
             <button type="submit">Create unit</button>
+            <span id="unitOwnerBanner" class="note" style="margin: 0; padding: 6px 10px"></span>
           </div>
         </form>
         <div class="result" id="unitResult"></div>
@@ -520,6 +524,8 @@
         if (status < 400 && json?.lister) {
           const l = json.lister;
           $('unit_lister_id').value = l.id; // pre-fill the create-unit lister_id
+          if (l.name) listerNames.set(l.id, l.name);
+          renderUnitOwnerBanner();
           const enrolled = l.enrollment_status === 'verified';
           summary =
             `<dl class="kv"><dt>lister id</dt><dd><code>${esc(l.id)}</code></dd>` +
@@ -532,6 +538,7 @@
           // The documented retry pattern: on 409 the ref already names one of your listers — take
           // `lister_id` and continue with the existing lister instead of creating a duplicate.
           $('unit_lister_id').value = json.lister_id;
+          renderUnitOwnerBanner();
           summary =
             `<div class="note warn">This <code>external_ref</code> already names one of your listers — no duplicate was created. Continuing with the existing lister.</div>` +
             `<dl class="kv"><dt>existing lister id</dt><dd><code>${esc(json.lister_id)}</code></dd></dl>` +
@@ -547,6 +554,10 @@
         $('listerReload').disabled = false;
         let summary = '';
         if (status < 400 && Array.isArray(json?.data)) {
+          json.data.forEach((l) => {
+            if (l.id && l.name) listerNames.set(l.id, l.name);
+          });
+          renderUnitOwnerBanner();
           const rows = json.data
             .map(
               (l) =>
@@ -668,11 +679,38 @@
         const use = e.target.closest('[data-useunit]');
         if (use) {
           $('unit_lister_id').value = use.getAttribute('data-useunit');
+          renderUnitOwnerBanner();
           $('unit_lister_id').scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
       });
 
       // ── 1. Create unit ──
+      // The lister_id field is auto-filled from section A and PERSISTS (including across reloads, from the
+      // server's lastListerId) — which silently sent every new unit to that lister. Nothing on screen said
+      // so, so units "vanished": they were owned by a login-less lister, not by you. Keep the convenience,
+      // kill the silence — the owner is now stated next to the button and refreshed on every change (SCR-490).
+      const listerNames = new Map();
+
+      function renderUnitOwnerBanner() {
+        const banner = $('unitOwnerBanner');
+        if (!banner) return;
+        const listerId = str($('unit_lister_id')?.value);
+        if (!listerId) {
+          banner.className = 'note ok';
+          banner.textContent = 'Creating under your own company.';
+          return;
+        }
+        const name = listerNames.get(listerId);
+        banner.className = 'note warn';
+        banner.textContent = `Creating under lister ${name ? name + ' ' : ''}(${listerId}) — it will belong to that lister, not to you.`;
+      }
+
+      $('unit_lister_id')?.addEventListener('input', renderUnitOwnerBanner);
+      $('clearListerId')?.addEventListener('click', () => {
+        $('unit_lister_id').value = '';
+        renderUnitOwnerBanner();
+      });
+
       $('unitForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const components = [...document.querySelectorAll('#components input:checked')].map((c) => c.value);
@@ -702,8 +740,15 @@
         if (status < 400 && json?.unit) {
           const url = json.application?.application_url;
           $('screen_unit_id').value = json.unit.id;
+          const ownerId = json.unit.lister_id ?? body.lister_id ?? null;
+          const ownerName = ownerId ? listerNames.get(ownerId) : null;
           summary =
             `<dl class="kv"><dt>unit id</dt><dd><code>${esc(json.unit.id)}</code></dd>` +
+            `<dt>owner</dt><dd>${
+              ownerId
+                ? `lister ${ownerName ? esc(ownerName) + ' ' : ''}<code>${esc(ownerId)}</code>`
+                : 'your own company'
+            }</dd>` +
             `<dt>screening_configured</dt><dd>${json.unit.screening_configured}</dd>` +
             (url
               ? `<dt>application_url</dt><dd><a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a></dd>`
@@ -824,6 +869,7 @@
         if (json?.lastUnitId) $('screen_unit_id').value = json.lastUnitId;
         if (json?.lastGroupId) $('group_id').value = json.lastGroupId;
         if (json?.lastListerId) $('unit_lister_id').value = json.lastListerId;
+        renderUnitOwnerBanner();
       })();
     </script>
   </body>
