@@ -97,7 +97,10 @@ provision and address with your **one** API key:
    enrollment — which no longer asks for SSN/DOB. `enrollment_status` becomes `verified` (check via
    **List my listers**).
 3. **Create units with that `lister_id`** (section 1 pre-fills it) → the unit and its screenings are owned
-   by the lister; its reports share to the lister's own Experian account.
+   by the lister; its reports share to the lister's own Experian account. The field **stays set until you
+   clear it** (including across reloads), so section 1 states the owner next to **Create unit** and the
+   result echoes it — a lister-owned unit belongs to that lister, and appears in your Burnt dashboard
+   flagged as a managed lister's rather than as one of your own.
 
 > **Prefill the enrollment form (optional, SCR-479):** pass a `prefill` object in the enrollment-session
 > call (recommended — stored with the token, no PII in the URL), or append allowlisted fields to the link's
