@@ -102,7 +102,7 @@ provision and address with your **one** API key:
    result echoes it — a lister-owned unit belongs to that lister, and appears in your Burnt dashboard
    flagged as a managed lister's rather than as one of your own.
 
-> **Prefill the enrollment form (optional, SCR-479):** pass a `prefill` object in the enrollment-session
+> **Prefill the enrollment form (optional):** pass a `prefill` object in the enrollment-session
 > call (recommended — stored with the token, no PII in the URL), or append allowlisted fields to the link's
 > `#hash`. Section **A** has a collapsible **Enrollment prefill** panel with a body/URL channel toggle.
 > No SSN/DOB (the enrollment no longer collects them), and **business enrollment can't be prefilled** —
