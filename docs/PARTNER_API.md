@@ -222,6 +222,14 @@ POST /api/v1/units
 }
 ```
 
+`component_ids` accepts `identity`, `employment`, `income`, `credit`, `evictions`, and `background`.
+Use `employment` for payroll-backed employer/status/salary verification. Use `income` for the
+bank-backed income check: Burnt asks the applicant to connect the bank account where they receive
+income and uses recurring deposits plus balance signals for the income verdict. If both `employment`
+and `income` are selected, Burnt can show payroll income while still verifying that income through the
+bank connection. If an older integration still sends the legacy `assets` id, Burnt maps it to `income`
+for compatibility; new integrations should send `income`.
+
 Provide the structured address fields (`address_line1`, `city`, `state`, `postal_code`, `country`) —
 the duplicate-address guard keys off them, so `city`/`state`/`postal_code` alone can false-positive
 against other units in the same zip.
@@ -321,6 +329,8 @@ POST /api/v1/units/{unitId}/rule-set
 ```
 
 Body: `{ "component_ids": [...], "applicant_pays_cents": 2000, "fee_payer": "applicant", "replace_active": false }`.
+Use the same component ids described in **Create a unit** above; `income` is the bank-backed income
+verification component.
 `fee_payer` works exactly as in **Create a unit** above (`"operator"` = you cover the whole fee up front
 from the unit's saved card, applicant not charged). Currency is always USD and is set by Burnt — you do
 not send it (any `currency` you pass is ignored). Returns the rule set plus the application link. If the
@@ -574,18 +584,68 @@ events so you don't have to poll:
 | `screening.check.completed`   | A single check finished — `check` is one of `identity`, `credit`, `evictions`, `background`, `income`, `employment`. A real-time progress signal, fired mid-flow as each step completes (before submit) |
 | `application.review_required` | An applicant's check was routed to manual review (completion is delayed, not broken) |
 | `application.completed`       | One applicant's screening reached a terminal result (all their checks + reviews done) |
-| `application_group.completed` | Every applicant screening in a group has reached a terminal state |
+| `application_group.completed` | Every applicant screening in a group has reached a terminal state; includes the group income and threshold summary when income is part of the rule set |
 | `application_group.decided`   | An operator accepted or rejected the household — carries the same `decision` object as `GET /application-groups/{id}` |
 
 New event types may be added over time — **ignore any `event` you don't recognize** rather than erroring on it.
 
 **Correlating events to your applicant.** Every event payload carries the handles you got back when you created the screening, so you can map an event to your record without parsing the `apply_url`: `application_id` (the rental application), `group_id` (the household), and `external_id` (the id you passed on create). On group events these appear per applicant in the `applicants[]` array. All three are `null` for non-partner / reusable links.
 
-**Progress vs. result.** `screening.check.completed` is a lightweight, PII-free **progress** signal fired the instant each check finishes, mid-flow. It does not carry the verified result, so a check finishing early does not leak its result. The terminal result is split by where you read it: the **decision, status, and per-applicant income** live on `GET /application-groups/{id}` (released when the applicant **submits**); the **raw screening values** (credit score + record counts + the report link) are delivered on the `application.completed` webhook — see below — and are **not** on that pull endpoint.
+**Progress vs. result.** `screening.check.completed` is a lightweight, PII-free **progress** signal fired
+the instant each check finishes, mid-flow. It does not carry the verified result, so a check finishing
+early does not leak its result. `GET /application-groups/{id}` stays PII-free and returns status,
+decision, eligibility, and per-member progress only. Income result fields are delivered on the terminal
+`application_group.completed` webhook after the group reaches a terminal state. Credit, eviction,
+background counts, and report links are delivered on the per-applicant `application.completed` webhook.
+
+### The `application_group.completed` payload
+
+`application_group.completed` is the terminal household event. It is the partner-facing payload for
+income and threshold results, so treat it as regulated applicant data and store it accordingly. For an
+income-only rule set, the income values come from the bank-backed income verification. For a rule set
+that includes both `employment` and `income`, Burnt can include payroll income while the bank-backed
+income verification contributes to the final verdict.
+
+```jsonc
+{
+  "event": "application_group.completed",
+  "group_id": "grp_414mbv8ru0dk",
+  "status": "pass", // "pending" | "partial" | "error" | "pass" | "fail" | "completed" | "archived"
+  "monthly_rent_cents": 300000,
+  "combined_annual_income": 124000,
+  "required_annual_income": 120000,
+  "passes_threshold": true,
+  "guarantor_qualified": null,
+  "applicants": [
+    {
+      "link_id": "lnk_44p2avdsl0rp",
+      "application_id": "rapp_wtureasdugbz",
+      "external_id": "partner-doors-003",
+      "name": "Jane Doe",
+      "verification_id": "ver_abc123",
+      "status": "completed",
+      "annual_income": 124000,
+      "verification_method": "source",
+      "verification_source_label": "direct from source",
+      "document_summary": null,
+      "document_review_status": null,
+      "role": "applicant"
+    }
+  ],
+  "created_at": "2026-07-23T22:11:21.423Z"
+}
+```
+
+- `combined_annual_income` is the household income Burnt used for the income threshold verdict.
+- `required_annual_income` is derived from monthly rent and the active rule set threshold.
+- `passes_threshold` is `true`, `false`, or `null` when the rule set has no automated income verdict.
+- Each applicant row carries that person's partner correlation ids plus their annual income when
+  available.
 
 ### The `application.completed` payload
 
-`application.completed` is the terminal per-applicant event and the **only** place the raw screening values are delivered. (The pull API deliberately returns status/decision, not the underlying report data.)
+`application.completed` is the terminal per-applicant event for credit, eviction, background, and report
+link values. The pull API deliberately returns status/decision, not the underlying report data.
 
 ```jsonc
 {
