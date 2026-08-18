@@ -125,6 +125,7 @@
       .note.ok { background: color-mix(in srgb, var(--ok) 12%, transparent); border-left-color: var(--ok); }
       .note.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); border-left-color: var(--warn); }
       .note code { background: color-mix(in srgb, var(--muted) 16%, transparent); padding: 0 3px; border-radius: 4px; }
+      .event-summary { margin: 10px 0 12px; }
       .muted { color: var(--muted); }
       @media (max-width: 620px) { .grid { grid-template-columns: 1fr; } }
     </style>
@@ -294,7 +295,7 @@
                 <label><input type="checkbox" value="evictions" checked /> evictions</label>
                 <label><input type="checkbox" value="background" checked /> background</label>
               </div>
-              <div class="fieldhint">Uncheck all to create a bare unit (no screening; <code>application</code> comes back <code>null</code>).</div>
+              <div class="fieldhint"><code>income</code> is the bank-backed income verification check. Older integrations that send <code>assets</code> are mapped to <code>income</code>, but new integrations should send <code>income</code>. Uncheck all to create a bare unit (no screening; <code>application</code> comes back <code>null</code>).</div>
             </div>
             <div>
               <label>applicant_pays_cents</label>
@@ -407,6 +408,13 @@
       const num = (v) => (v === '' || v == null ? undefined : Number(v));
       const str = (v) => { const t = (v ?? '').trim(); return t === '' ? undefined : t; };
       const dollars = (cents) => (Number.isFinite(cents) ? '$' + (cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—');
+      const annualDollars = (value) => {
+        if (value === null || value === undefined || value === '') return '—';
+        const amount = Number(value);
+        return Number.isFinite(amount) ? '$' + amount.toLocaleString('en-US', { maximumFractionDigits: 0 }) : '—';
+      };
+      const fieldValue = (value) => value === null || value === undefined || value === '' ? '—' : esc(value);
+      const boolValue = (value) => value === null || value === undefined ? '—' : String(Boolean(value));
       const prune = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
       const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -840,9 +848,32 @@
       });
 
       // ── Webhooks ──
+      function webhookSummary(event) {
+        if (!event || event.event !== 'application_group.completed') return '';
+        const applicants = Array.isArray(event.applicants) ? event.applicants : [];
+        const applicantRows = applicants
+          .map((a) =>
+            `<tr><td><code>${fieldValue(a.link_id)}</code></td><td>${fieldValue(a.external_id)}</td><td>${fieldValue(a.status)}</td><td>${annualDollars(a.annual_income)}</td><td>${fieldValue(a.verification_method)}</td></tr>`,
+          )
+          .join('');
+        return (
+          `<div class="note ok event-summary">` +
+          `<strong>application_group.completed income result</strong>` +
+          `<dl class="kv">` +
+          `<dt>status</dt><dd>${fieldValue(event.status)}</dd>` +
+          `<dt>passes_threshold</dt><dd>${boolValue(event.passes_threshold)}</dd>` +
+          `<dt>combined_annual_income</dt><dd>${annualDollars(event.combined_annual_income)}</dd>` +
+          `<dt>required_annual_income</dt><dd>${annualDollars(event.required_annual_income)}</dd>` +
+          `</dl>` +
+          `<table><thead><tr><th>link</th><th>external_id</th><th>status</th><th>annual_income</th><th>method</th></tr></thead><tbody>${applicantRows || '<tr><td colspan="5" class="muted">no applicants included</td></tr>'}</tbody></table>` +
+          `</div>`
+        );
+      }
+
       async function refreshHooks() {
         const { status, json } = await api('GET', '/api/webhooks');
         const items = json?.data ?? [];
+        const eventSummaries = items.map((w) => webhookSummary(w.event)).filter(Boolean).join('');
         const rows = items
           .map((w) => {
             const mark = /verified/.test(w.outcome) ? '✓' : /rejected|not set|not verified/.test(w.outcome) ? '✕' : '·';
@@ -851,6 +882,7 @@
           .join('');
         const summary =
           `<div class="fieldhint">secret configured: ${json?.webhookSecretConfigured ? 'yes' : 'no'} · ${items.length} received</div>` +
+          eventSummaries +
           (items.length
             ? `<table><thead><tr><th>received</th><th>event</th><th>outcome</th><th>delivery</th></tr></thead><tbody>${rows}</tbody></table>`
             : '<div class="fieldhint muted">none yet — set the tunnel + dashboard URL + secret, then click “Send test” in the dashboard.</div>');

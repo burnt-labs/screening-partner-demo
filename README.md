@@ -141,7 +141,9 @@ dashboard** (unit → Unit rules set → Payment method → Save) — no need to
 `BURNT_WEBHOOK_SECRET`, 5-min freshness window, constant-time compare, delivery-id dedupe) and logs
 every event Burnt sends — per-check `screening.check.completed`, per-applicant `application.*`, and
 household `application_group.*` (full list in [`docs/PARTNER_API.md`](docs/PARTNER_API.md#webhooks)).
-Received events are also visible in the "Webhooks received" panel.
+Received events are also visible in the "Webhooks received" panel. Polling shows status/decision only;
+the terminal `application_group.completed` webhook carries the household income and threshold fields,
+and the demo highlights those fields above the raw JSON.
 
 **Locally, expect this to stay empty**, because:
 
